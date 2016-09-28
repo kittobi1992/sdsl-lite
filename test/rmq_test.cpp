@@ -22,7 +22,8 @@ class rmq_test : public ::testing::Test { };
 using testing::Types;
 
 typedef Types<sdsl::rmq_succinct_sct<>,
-        sdsl::rmq_succinct_sada<>
+        sdsl::rmq_succinct_sada<>,
+        sdsl::rmq_succinct_bp<>
         > Implementations;
 
 TYPED_TEST_CASE(rmq_test, Implementations);

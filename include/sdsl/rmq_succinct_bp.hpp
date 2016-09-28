@@ -82,7 +82,7 @@ class rmq_succinct_bp
                         s.pop();
                         m_gct_bp[bp_cur_pos--] = 1;
                     }
-                    m_gct_bp[bp_cur_pos--] = 0;
+                    bp_cur_pos--;
                     s.push(cur_elem);
                 }
                 while(!s.empty()) {
@@ -95,8 +95,8 @@ class rmq_succinct_bp
         template<class t_rac>
         void construct_generalized_cartesian_tree_leftmost(const t_rac* v) {
             if(v->size() > 0) {
-                int64_t cur_pos = 0;
-                int64_t bp_cur_pos = 0;
+                size_t cur_pos = 0;
+                size_t bp_cur_pos = 0;
                 std::stack<typename t_rac::value_type> s;
                 s.push(std::numeric_limits<typename t_rac::value_type>::min()); 
                 m_gct_bp[bp_cur_pos++] = 1;
@@ -104,14 +104,14 @@ class rmq_succinct_bp
                     typename t_rac::value_type cur_elem = (*v)[cur_pos++];
                     while(s.top() > cur_elem) {
                         s.pop();
-                        m_gct_bp[bp_cur_pos++] = 0;
+                        bp_cur_pos++;
                     }
                     m_gct_bp[bp_cur_pos++] = 1;
                     s.push(cur_elem);
                 }
                 while(!s.empty()) {
                     s.pop();
-                    m_gct_bp[bp_cur_pos++] = 0;
+                    bp_cur_pos++;
                 }
             }
         }
@@ -135,7 +135,7 @@ class rmq_succinct_bp
         template<class t_rac>
         rmq_succinct_bp(const t_rac* v=nullptr) {
             if (v != nullptr) {
-                m_gct_bp.resize(2*v->size()+2);
+                m_gct_bp = bit_vector(2*v->size()+2,0);
                 construct_generalized_cartesian_tree_leftmost(v);
                 m_gct_bp_support = bp_support_type(&m_gct_bp); 
             }
@@ -203,7 +203,7 @@ class rmq_succinct_bp
         }
 
         size_type size()const {
-            return m_gct_bp.size()/2;
+            return (m_gct_bp.size()-2)/2;
         }
 
         size_type serialize(std::ostream& out, structure_tree_node* v=nullptr, std::string name="")const {
