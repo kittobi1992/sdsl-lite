@@ -89,12 +89,12 @@ class rmq_support_sparse_table
                 m_table[i] = int_vector<>(n-(1ULL<<(i+1))+1, 0, i+1);
             }
             for (size_type i=0; i<n-1; ++i) {
-                if (!mm_trait::compare((*m_v)[i], (*m_v)[i+1]))
+                if (!mm_trait::strict_compare((*m_v)[i], (*m_v)[i+1]))
                     m_table[0][i] = 1;
             }
             for (size_type i=1; i<k; ++i) {
                 for (size_type j=0; j<m_table[i].size(); ++j) {
-                    m_table[i][j] = mm_trait::compare((*m_v)[j+m_table[i-1][j]], (*m_v)[j+(1ULL<<i)+m_table[i-1][j+(1ULL<<i)]]) ? m_table[i-1][j] : (1ULL<<i)+m_table[i-1][j+(1ULL<<i)];
+                    m_table[i][j] = mm_trait::strict_compare((*m_v)[j+m_table[i-1][j]], (*m_v)[j+(1ULL<<i)+m_table[i-1][j+(1ULL<<i)]]) ? m_table[i-1][j] : (1ULL<<i)+m_table[i-1][j+(1ULL<<i)];
                 }
             }
         }
@@ -159,10 +159,10 @@ class rmq_support_sparse_table
             if (l==r)
                 return l;
             if (l+1 == r)
-                return mm_trait::compare((*m_v)[l],(*m_v)[r]) ? l : r;
+                return mm_trait::strict_compare((*m_v)[l],(*m_v)[r]) ? l : r;
             size_type k = bits::hi(r-l);
             const size_type rr = r-(1ULL<<k)+1;
-            return mm_trait::compare((*m_v)[l+m_table[k-1][l]], (*m_v)[rr+m_table[k-1][rr]]) ? l+m_table[k-1][l] : rr+m_table[k-1][rr];
+            return mm_trait::strict_compare((*m_v)[l+m_table[k-1][l]], (*m_v)[rr+m_table[k-1][rr]]) ? l+m_table[k-1][l] : rr+m_table[k-1][rr];
         }
 
         size_type size()const

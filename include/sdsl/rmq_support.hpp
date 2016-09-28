@@ -46,6 +46,7 @@ struct min_max_trait<RandomAccessContainer, false> {
 #include "rmq_support_sparse_table.hpp"
 #include "rmq_succinct_sct.hpp"
 #include "rmq_succinct_bp.hpp"
+#include "rmq_succinct_bp_fast.hpp"
 #include "rmq_succinct_sada.hpp"
 
 #endif

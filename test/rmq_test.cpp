@@ -23,7 +23,8 @@ using testing::Types;
 
 typedef Types<sdsl::rmq_succinct_sct<>,
         sdsl::rmq_succinct_sada<>,
-        sdsl::rmq_succinct_bp<>
+        sdsl::rmq_succinct_bp<>,
+        sdsl::rmq_succinct_bp_fast<>
         > Implementations;
 
 TYPED_TEST_CASE(rmq_test, Implementations);
