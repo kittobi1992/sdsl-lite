@@ -141,11 +141,9 @@ class rmq_succinct_bp_fast
             m_sparse_rmq = rmq_support_sparse_table<>(&m_min_excess);
         }
         
-        inline bit_vector::size_type min_ex(const bit_vector::size_type i1, const bit_vector::size_type i2, const bit_vector::size_type i3) const {
+        inline bit_vector::size_type min_ex(const bit_vector::size_type i1, const bit_vector::size_type i2, const bit_vector::size_type i3,
+                                            const int_vector<>::value_type i1_ex, const int_vector<>::value_type i2_ex, const int_vector<>::value_type i3_ex) const {
             assert(i1 <= i2); assert(i2 <= i3);
-            auto i1_ex = m_gct_bp_support.excess(i1);
-            auto i2_ex = m_gct_bp_support.excess(i2);
-            auto i3_ex = m_gct_bp_support.excess(i3);
             //std::cout << i1_ex << " " << i2_ex << " " << i3_ex << std::endl;
             if(i1_ex > i2_ex) {
                 if(i2_ex < i3_ex) return i2;
@@ -163,6 +161,7 @@ class rmq_succinct_bp_fast
     public:
         typedef typename bit_vector::size_type size_type;
         typedef typename bit_vector::size_type value_type;
+        typedef typename int_vector<>::value_type i_value_type;
         typedef t_bp_support                   bp_support_type;
 
         const bit_vector&                  gct_bp         = m_gct_bp;
@@ -267,15 +266,27 @@ class rmq_succinct_bp_fast
                 return m_gct_bp_support.rank(rmq_e)-1;
             }
             else {
-                size_type rmq_sparse = m_min_excess_idx[m_sparse_rmq(sparse_i,sparse_j-1)];
+                size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
+                size_type rmq_sparse = m_min_excess_idx[rmq_sparse_idx];
+                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
                 
                 size_type rmq_e1 = m_min_excess_idx[sparse_i-(i != 0)];
-                if(rmq_e1 < i) rmq_e1 = m_gct_bp_support.rmq(i,t_block_size*sparse_i);
-                size_type rmq_e2 = m_min_excess_idx[sparse_j];
-                if(rmq_e2 > j) rmq_e2 = m_gct_bp_support.rmq(t_block_size*sparse_j,j);
+                i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
+                if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
+                    rmq_e1 = m_gct_bp_support.rmq(i,t_block_size*sparse_i);
+                    rmq_e1_ex = m_gct_bp_support.excess(rmq_e1);
+                }
                 
-                size_type rmq_e = min_ex(rmq_e1,rmq_sparse,rmq_e2);
-                return m_gct_bp_support.rank(rmq_e)-1;   
+                size_type rmq_e2 = m_min_excess_idx[sparse_j];
+                i_value_type rmq_e2_ex = m_min_excess[sparse_j];
+                if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
+                    rmq_e2 = m_gct_bp_support.rmq(t_block_size*sparse_j,j);
+                    rmq_e2_ex = m_gct_bp_support.excess(rmq_e2);
+                }
+                
+                size_type rmq_e = min_ex(rmq_e1,rmq_sparse,rmq_e2,
+                                         rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
+                return m_gct_bp_support.rank(rmq_e)-1;      
             }
         }
 
