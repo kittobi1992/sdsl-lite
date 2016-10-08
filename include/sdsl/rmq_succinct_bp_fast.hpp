@@ -240,13 +240,6 @@ class rmq_succinct_bp_fast
                                &m_min_excess, &(rm.min_excess));   
         }
         
-        void print_bp() {
-            size_t N = m_gct_bp.size();
-            for(size_t i = 0; i < N; ++i) {
-                std::cout << (m_gct_bp[i] ? '(' : ')');
-            }
-            std::cout << std::endl;
-        }
 
         //! Range minimum/maximum query for the supported random access container v.
         /*!
@@ -266,9 +259,14 @@ class rmq_succinct_bp_fast
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
             if(sparse_i >= sparse_j) {
-                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
-                size_type rmq_e2 = get_min_excess_idx(sparse_j);
-                size_type rmq_e = (m_min_excess[sparse_i-(i != 0)] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);
+                sparse_i = sparse_i-(i != 0);
+                size_type rmq_e = i;
+                if(sparse_i == sparse_j) rmq_e = get_min_excess_idx(sparse_i);
+                else {
+                    size_type rmq_e1 = get_min_excess_idx(sparse_i);
+                    size_type rmq_e2 = get_min_excess_idx(sparse_j);
+                    rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
+                }
                 if(rmq_e < i || rmq_e > j) rmq_e = m_gct_bp_support.rmq(i,j);
                 return m_gct_bp_support.rank(rmq_e)-1;
             }
