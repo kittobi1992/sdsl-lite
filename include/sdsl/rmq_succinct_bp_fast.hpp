@@ -135,10 +135,13 @@ class rmq_succinct_bp_fast
             m_min_excess_idx = int_vector<>(bp_size/t_block_size+1,0);
             for(size_t i = 0; i*t_block_size < bp_size; ++i) {
                 uint64_t min_idx = m_gct_bp_support.rmq(i*t_block_size, std::min((i+1)*t_block_size - 1,bp_size-1));
-                m_min_excess_idx[i] = min_idx;
+                m_min_excess_idx[i] = min_idx-i*t_block_size;
                 m_min_excess[i] = m_gct_bp_support.excess(min_idx);
             }
             m_sparse_rmq = rmq_support_sparse_table<>(&m_min_excess);
+            
+            util::bit_compress(m_min_excess);
+            util::bit_compress(m_min_excess_idx);
         }
         
         inline bit_vector::size_type min_ex(const bit_vector::size_type i1, const bit_vector::size_type i2, const bit_vector::size_type i3,
@@ -155,6 +158,10 @@ class rmq_succinct_bp_fast
                 if(i2_ex < i3_ex) return i2;
                 else return i3;
             }
+        }
+        
+        inline int_vector<>::value_type get_min_excess_idx(size_t i) const {
+            return m_min_excess_idx[i] + i * t_block_size;
         }
         
         
@@ -259,25 +266,25 @@ class rmq_succinct_bp_fast
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
             if(sparse_i >= sparse_j) {
-                size_type rmq_e1 = m_min_excess_idx[sparse_i-(i != 0)];
-                size_type rmq_e2 = m_min_excess_idx[sparse_j];
+                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
+                size_type rmq_e2 = get_min_excess_idx(sparse_j);
                 size_type rmq_e = (m_min_excess[sparse_i-(i != 0)] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);
                 if(rmq_e < i || rmq_e > j) rmq_e = m_gct_bp_support.rmq(i,j);
                 return m_gct_bp_support.rank(rmq_e)-1;
             }
             else {
                 size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
-                size_type rmq_sparse = m_min_excess_idx[rmq_sparse_idx];
+                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
                 i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
                 
-                size_type rmq_e1 = m_min_excess_idx[sparse_i-(i != 0)];
+                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
                     rmq_e1 = m_gct_bp_support.rmq(i,t_block_size*sparse_i);
                     rmq_e1_ex = m_gct_bp_support.excess(rmq_e1);
                 }
                 
-                size_type rmq_e2 = m_min_excess_idx[sparse_j];
+                size_type rmq_e2 = get_min_excess_idx(sparse_j);
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
                     rmq_e2 = m_gct_bp_support.rmq(t_block_size*sparse_j,j);
