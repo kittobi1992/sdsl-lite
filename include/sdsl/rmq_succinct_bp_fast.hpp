@@ -252,8 +252,9 @@ class rmq_succinct_bp_fast
          * \par Time complexity
          *      \f$ \Order{1} \f$
          */
-        size_type operator()(const size_type l, const size_type r)const {
+        std::pair<size_type,bool> operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
+            bool rmq_scan = false;
             size_type i     = m_gct_bp_support.select(l+2)-1;
             size_type j     = m_gct_bp_support.select(r+2);
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
@@ -267,8 +268,11 @@ class rmq_succinct_bp_fast
                     size_type rmq_e2 = get_min_excess_idx(sparse_j);
                     rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
                 }
-                if(rmq_e < i || rmq_e > j) rmq_e = m_gct_bp_support.rmq(i,j);
-                return m_gct_bp_support.rank(rmq_e)-1;
+                if(rmq_e < i || rmq_e > j) {
+                    rmq_scan = true;
+                    rmq_e = m_gct_bp_support.rmq(i,j);
+                }
+                return std::make_pair(m_gct_bp_support.rank(rmq_e)-1,rmq_scan);
             }
             else {
                 size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
@@ -278,6 +282,7 @@ class rmq_succinct_bp_fast
                 size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
+                    rmq_scan = true;
                     rmq_e1 = m_gct_bp_support.rmq(i,t_block_size*sparse_i);
                     rmq_e1_ex = m_gct_bp_support.excess(rmq_e1);
                 }
@@ -285,13 +290,14 @@ class rmq_succinct_bp_fast
                 size_type rmq_e2 = get_min_excess_idx(sparse_j);
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
+                    rmq_scan = true;
                     rmq_e2 = m_gct_bp_support.rmq(t_block_size*sparse_j,j);
                     rmq_e2_ex = m_gct_bp_support.excess(rmq_e2);
                 }
                 
                 size_type rmq_e = min_ex(rmq_e1,rmq_sparse,rmq_e2,
                                          rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
-                return m_gct_bp_support.rank(rmq_e)-1;      
+                return std::make_pair(m_gct_bp_support.rank(rmq_e)-1,rmq_scan);      
             }
         }
 
