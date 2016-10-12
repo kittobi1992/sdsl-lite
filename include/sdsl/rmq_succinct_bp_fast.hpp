@@ -177,6 +177,14 @@ private:
             return m_min_excess_idx[i] + i * t_block_size;
         }
         
+        inline bit_vector::size_type get_min_pos_in_64bit_word(const uint64_t *bv_data, bit_vector::size_type block_id, bit_vector::size_type idx) const {
+            typedef bit_vector::size_type size_type;
+            size_type min_pos_byte_idx = idx+8*m_min_excess_idx64[block_id];
+            size_type min_pos_idx = min_pos_byte_idx 
+                                    + excess::data.min_pos_max[(((*(bv_data+(min_pos_byte_idx>>6)))>>(min_pos_byte_idx&0x3F))&0xFF)]; 
+            return min_pos_idx;
+        }
+        
         inline bit_vector::size_type fast_rmq_scan(const bit_vector::size_type l, const bit_vector::size_type r) const {
             typedef bit_vector::size_type size_type;
             typedef bit_vector::value_type value_type;
@@ -188,6 +196,7 @@ private:
             difference_type cur_excess = 0;
             difference_type min_excess = 0;
             size_type min_excess_pos = l;
+            const uint64_t* b = m_gct_bp.data();
             
 //             std::cout << l << " " << l64 << " " << r64 << " " << r << " (" << (l64%64) << "," << (r64%64) << ")" << std::endl;
             for(size_type i = l+1; i < std::min(l64,r+1); ++i) {
@@ -200,12 +209,11 @@ private:
                     }
                 }
             }
-            const uint64_t* b = m_gct_bp.data();
+
             for(size_type i = l64; i < r64; i+=64) {
                 size_type cur_block = i>>6;
                 size_type min_pos_byte_idx = i+8*m_min_excess_idx64[cur_block];
-                size_type min_pos_idx = min_pos_byte_idx 
-                                         + excess::data.min_pos_max[(((*(b+(min_pos_byte_idx>>6)))>>(min_pos_byte_idx&0x3F))&0xFF)]; 
+                size_type min_pos_idx = get_min_pos_in_64bit_word(b,cur_block,i);
                 value_type min_pos_data = *(b+cur_block) & bits::lo_set[min_pos_idx-i+1];
                 difference_type tmp_min_excess = cur_excess + (bits::cnt(min_pos_data)<<1) - (min_pos_idx-i+1);
                 if(tmp_min_excess <= min_excess) {
