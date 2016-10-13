@@ -177,12 +177,12 @@ private:
             return m_min_excess_idx[i] + i * t_block_size;
         }
         
+        
         inline bit_vector::size_type get_min_pos_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& idx) const {
             typedef bit_vector::size_type size_type;
             size_type min_pos_byte_idx = idx+8*m_min_excess_idx64[block_id];
             size_type min_pos_idx = min_pos_byte_idx 
                                     + excess::data.min_pos_max[(((*(bv_data+(min_pos_byte_idx>>6)))>>(min_pos_byte_idx&0x3F))&0xFF)]; 
-//             std::cout << idx << " " << m_min_excess_idx64[block_id] << " " << min_pos_byte_idx << " " << min_pos_idx << std::endl;                                    
             return min_pos_idx;
         }
         
@@ -224,12 +224,13 @@ private:
                 }
                 
                 for(size_type i = l8; i < std::min(r8,l64); i += 8) {
-                    difference_type x = excess::data.min[(((*(b+(i>>6)))>>(i&0x3F))&0xFF)];
+                    uint8_t val = (((*(b+(i>>6)))>>(i&0x3F))&0xFF);
+                    difference_type x = excess::data.min[val];
                     if(cur_excess+x <= min_excess) {
                         min_excess = cur_excess+x;
-                        min_excess_pos = i + excess::data.min_pos_max[(((*(b+(i>>6)))>>(i&0x3F))&0xFF)];
+                        min_excess_pos = i + excess::data.min_pos_max[val];
                     }
-                    cur_excess += excess::data.word_sum[((*(b+(i>>6)))>>(i&0x3F))&0xFF];
+                    cur_excess += excess::data.word_sum[val];
                 }
                 
                 //Special case: If l starts in an 8-bit word and r end in the
@@ -253,7 +254,7 @@ private:
             }
             
             
-
+            //Scanning 64-bit words for min excess
             for(size_type i = l64; i < r64; i+=64) {
                 size_type cur_block = i>>6;
                 size_type min_pos_idx = get_min_pos_in_64bit_word(b,cur_block,i);
@@ -267,39 +268,42 @@ private:
             
             
             size_type last_block = std::max(l64,r64);
-            size_type min_pos_in_last_block = get_min_pos_in_64bit_word(b,last_block>>6,(last_block/64)*64);
-            if(min_pos_in_last_block > r) {
+            if(last_block <= r) {
+                size_type min_pos_in_last_block = get_min_pos_in_64bit_word(b,last_block>>6,(last_block/64)*64);
+                if(min_pos_in_last_block > r) {
                 
-                size_type r8 = (r/8)*8;
+                    size_type r8 = (r/8)*8;
                 
-                for(size_type i = last_block; i < r8; i += 8) {
-                    difference_type x = excess::data.min[(((*(b+(i>>6)))>>(i&0x3F))&0xFF)];
-                    if(cur_excess+x <= min_excess) {
-                        min_excess = cur_excess+x;
-                        min_excess_pos = i + excess::data.min_pos_max[(((*(b+(i>>6)))>>(i&0x3F))&0xFF)];
+                    for(size_type i = last_block; i < r8; i += 8) {
+                        uint8_t val = (((*(b+(i>>6)))>>(i&0x3F))&0xFF);
+                        difference_type x = excess::data.min[val];
+                        if(cur_excess+x <= min_excess) {
+                            min_excess = cur_excess+x;
+                            min_excess_pos = i + excess::data.min_pos_max[val];
+                        }
+                        cur_excess += excess::data.word_sum[val];
                     }
-                    cur_excess += excess::data.word_sum[((*(b+(i>>6)))>>(i&0x3F))&0xFF];
-                }
                 
-                //If r ends inside an 8-bit value, we have determine the
-                //excess value until the border of last 8-bit word inside (l,r)
-                for(size_type i = std::max(r8,last_block); i < r+1; ++i) {
-                    if(m_gct_bp[i]) ++cur_excess;
-                    else {
-                        --cur_excess;
-                        if(cur_excess <= min_excess) {
-                            min_excess_pos = i;
-                            min_excess = cur_excess;
+                    //If r ends inside an 8-bit value, we have determine the
+                    //excess value until the border of last 8-bit word inside (l,r)
+                    for(size_type i = std::max(r8,last_block); i < r+1; ++i) {
+                        if(m_gct_bp[i]) ++cur_excess;
+                        else {
+                            --cur_excess;
+                            if(cur_excess <= min_excess) {
+                                min_excess_pos = i;
+                                min_excess = cur_excess;
+                            }
                         }
                     }
-                }
                 
-            }
-            else {
-                difference_type tmp_min_excess = cur_excess + get_min_excess_in_64bit_word(b,last_block>>6,min_pos_in_last_block-(last_block/64)*64+1);
-                if(tmp_min_excess <= min_excess) {
-                    min_excess_pos = min_pos_in_last_block;
-                    min_excess = tmp_min_excess;
+                }
+                else {
+                    difference_type tmp_min_excess = cur_excess + get_min_excess_in_64bit_word(b,last_block>>6,min_pos_in_last_block-(last_block/64)*64+1);
+                    if(tmp_min_excess <= min_excess) {
+                        min_excess_pos = min_pos_in_last_block;
+                        min_excess = tmp_min_excess;
+                    }
                 }
             }
             
