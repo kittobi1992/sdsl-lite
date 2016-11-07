@@ -14,12 +14,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
-/*! \file rmq_succinct_bp_fast.hpp
-    \brief rmq_succinct_bp_fast.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
+/*! \file rmq_succinct_bp_fast_rec.hpp
+    \brief rmq_succinct_bp_fast_rec.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
     \author Tobias Heuer
 */
-#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST
-#define INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST
+#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST_REC
+#define INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST_REC
 
 #include <stack>
 #include <limits>
@@ -36,13 +36,13 @@
 namespace sdsl
 {
 
-template<uint32_t t_block_size=4096, bool fast = true, bool t_min = true, bool strict = false,
+template<uint32_t t_block_size=512, bool fast = true, bool t_min = true,
          class t_bp_support = bp_support_sada<t_block_size,32,rank_support_v5<> > >
-class rmq_succinct_bp_fast;
+class rmq_succinct_bp_fast_rec;
 
-template<uint32_t t_block_size=4096, bool fast = true, bool strict = false, class t_bp_support = bp_support_sada<t_block_size,32,rank_support_v5<> > >
-struct range_maximum_bp_fast {
-    typedef rmq_succinct_bp_fast<t_block_size, fast, false, strict, t_bp_support> type;
+template<uint32_t t_block_size=512, bool fast = true, class t_bp_support = bp_support_sada<t_block_size,32,rank_support_v5<> > >
+struct range_maximum_bp_fast_rec {
+    typedef rmq_succinct_bp_fast_rec<t_block_size, fast, false, t_bp_support> type;
 };
 
 //! A class to support range minimum or range maximum queries on a random access container.
@@ -61,24 +61,24 @@ struct range_maximum_bp_fast {
  * In Proceedings of Data Compression Conference, DCC'16.
  * 
  */
-template<uint32_t t_block_size, bool fast, bool t_min, bool strict, class t_bp_support>
-class rmq_succinct_bp_fast
+template<uint32_t t_block_size, bool fast, bool t_min, class t_bp_support>
+class rmq_succinct_bp_fast_rec
 {
         bit_vector                  m_gct_bp;         //!< A bit vector which contains the BP-GT of the input container.
         t_bp_support                m_gct_bp_support; //!< Support structure for the BPS-GT
-        rmq_support_sparse_table<>  m_sparse_rmq;
+        rmq_succinct_bp_fast<128,fast,t_min,true,t_bp_support>  m_rmq_recursive;
         int_vector<>                m_min_excess_idx;
         int_vector<>                m_min_excess; 
         int_vector<>                m_min_excess_idx64;
 
-        void copy(const rmq_succinct_bp_fast& rm) {
+        void copy(const rmq_succinct_bp_fast_rec& rm) {
             m_gct_bp = rm.m_gct_bp;
             m_gct_bp_support = rm.m_gct_bp_support;
             m_gct_bp_support.set_vector(&m_gct_bp);
             m_min_excess = rm.m_min_excess;
             m_min_excess_idx = rm.min_excess_idx;
-            m_sparse_rmq = rm.m_sparse_rmq;
-            m_sparse_rmq.set_vector(&m_min_excess);
+            m_rmq_recursive = rm.m_rmq_recursive;
+            m_min_excess_idx64 = rm.m_min_excess_idx64;
         }
 
         
@@ -118,17 +118,9 @@ private:
                 m_gct_bp[bp_cur_pos++] = 1;
                 while(cur_pos < v->size()) {
                     typename t_rac::value_type cur_elem = (*v)[cur_pos++];
-                    if(strict) {
-                        while(s.top() >= cur_elem && s.size() > 1) {
-                            s.pop();
-                            bp_cur_pos++;
-                        }
-                    }
-                    else {
-                        while(s.top() > cur_elem && s.size() > 1) {
-                            s.pop();
-                            bp_cur_pos++;
-                        }                        
+                    while(s.top() > cur_elem) {
+                        s.pop();
+                        bp_cur_pos++;
                     }
                     m_gct_bp[bp_cur_pos++] = 1;
                     s.push(cur_elem);
@@ -149,8 +141,7 @@ private:
                 m_min_excess_idx[i] = min_idx-i*t_block_size;
                 m_min_excess[i] = m_gct_bp_support.excess(min_idx);
             }
-            m_sparse_rmq = rmq_support_sparse_table<>(&m_min_excess);
-            
+            m_rmq_recursive = rmq_succinct_bp_fast<128,fast,t_min,true,t_bp_support>(&m_min_excess);
             util::bit_compress(m_min_excess);
             util::bit_compress(m_min_excess_idx);
         }
@@ -335,20 +326,20 @@ private:
 
         const bit_vector&                  gct_bp         = m_gct_bp;
         const bp_support_type&             gct_bp_support = m_gct_bp_support;
-        const rmq_support_sparse_table<>&  sparse_rmq     = m_sparse_rmq;
+        rmq_succinct_bp_fast<128,fast,t_min,true,t_bp_support>&  rmq_recursive = m_rmq_recursive;
         const int_vector<>&                min_excess     = m_min_excess;
         const int_vector<>&                min_excess_idx = m_min_excess_idx;
         const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
 
         //! Default constructor
-        rmq_succinct_bp_fast() {}
+        rmq_succinct_bp_fast_rec() {}
 
         //! Constructor
         /*! \tparam t_rac A random access container.
          *  \param  v     Pointer to container object.
          */
         template<class t_rac>
-        rmq_succinct_bp_fast(const t_rac* v=nullptr) {
+        rmq_succinct_bp_fast_rec(const t_rac* v=nullptr) {
             if (v != nullptr) {
                 m_gct_bp = bit_vector(2*v->size()+2,0);
                 construct_generalized_cartesian_tree_leftmost(v);
@@ -359,51 +350,48 @@ private:
         }
 
         //! Copy constructor
-        rmq_succinct_bp_fast(const rmq_succinct_bp_fast& rm) {
+        rmq_succinct_bp_fast_rec(const rmq_succinct_bp_fast_rec& rm) {
             *this = rm;
         }
 
         //! Move constructor
-        rmq_succinct_bp_fast(rmq_succinct_bp_fast&& rm) {
+        rmq_succinct_bp_fast_rec(rmq_succinct_bp_fast_rec&& rm) {
             *this = std::move(rm);
         }
 
-        rmq_succinct_bp_fast& operator=(const rmq_succinct_bp_fast& rm) {
+        rmq_succinct_bp_fast_rec& operator=(const rmq_succinct_bp_fast_rec& rm) {
             if (this != &rm) {
                 m_gct_bp = rm.m_gct_bp;
                 m_gct_bp_support = rm.m_gct_bp_support;
                 m_gct_bp_support.set_vector(&m_gct_bp);
                 m_min_excess = rm.m_min_excess;
                 m_min_excess_idx = rm.min_excess_idx;
-                m_sparse_rmq = rm.m_sparse_rmq;
-                m_sparse_rmq.set_vector(&m_min_excess);
+                m_rmq_recursive = rm.m_rmq_recursive;
                 m_min_excess_idx64 = rm.min_excess_idx64;
             }
             return *this;
         }
 
-        rmq_succinct_bp_fast& operator=(rmq_succinct_bp_fast&& rm) {
+        rmq_succinct_bp_fast_rec& operator=(rmq_succinct_bp_fast_rec&& rm) {
             if (this != &rm) {
                 m_gct_bp = std::move(rm.m_gct_bp);
                 m_gct_bp_support = std::move(rm.m_gct_bp_support);
                 m_gct_bp_support.set_vector(&m_gct_bp);   
                 m_min_excess = std::move(rm.m_min_excess);
                 m_min_excess_idx = std::move(rm.m_min_excess_idx);
-                m_sparse_rmq = std::move(rm.m_sparse_rmq);
-                m_sparse_rmq.set_vector(&m_min_excess);
+                m_rmq_recursive = std::move(rm.m_rmq_recursive);
                 m_min_excess_idx64 = std::move(rm.m_min_excess_idx64);
             }
             return *this;
         }
 
-        void swap(rmq_succinct_bp_fast& rm) {
+        void swap(rmq_succinct_bp_fast_rec& rm) {
             m_gct_bp.swap(rm.m_gct_bp);
             util::swap_support(m_gct_bp_support, rm.m_gct_bp_support,
                                &m_gct_bp, &(rm.m_gct_bp));   
             m_min_excess.swap(rm.m_min_excess);
             m_min_excess_idx.swap(rm.m_min_excess_idx);
-            util::swap_support(m_sparse_rmq, rm.m_sparse_rmq,
-                               &m_min_excess, &(rm.min_excess)); 
+            m_rmq_recursive.swap(rm.m_rmq_recursive);
             m_min_excess_idx64.swap(rm.m_min_excess_idx64);
         }
         
@@ -440,7 +428,7 @@ private:
                 return m_gct_bp_support.rank(rmq_e)-1;
             }
             else {
-                size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
+                size_type rmq_sparse_idx = m_rmq_recursive(sparse_i,sparse_j-1);
                 size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
                 i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
                 
@@ -490,7 +478,7 @@ private:
                 return std::make_pair(m_gct_bp_support.rank(rmq_e)-1,rmq_scan);
             }
             else {
-                size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
+                size_type rmq_sparse_idx = m_rmq_recursive(sparse_i,sparse_j-1).first;
                 size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
                 i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
                 
@@ -531,7 +519,7 @@ private:
             written_bytes += m_gct_bp_support.serialize(out, child, "gct_bp_support");    
             written_bytes += m_min_excess.serialize(out, child, "min_excess");             
             written_bytes += m_min_excess_idx.serialize(out, child, "min_excess_idx"); 
-            written_bytes += m_sparse_rmq.serialize(out, child, "sparse_rmq"); 
+            written_bytes += m_rmq_recursive.serialize(out, child, "rmq_recursive");
             written_bytes += m_min_excess_idx64.serialize(out, child, "min_excess_idx64"); 
             structure_tree::add_size(child, written_bytes);
             return written_bytes;
@@ -542,7 +530,7 @@ private:
             m_gct_bp_support.load(in, &m_gct_bp);
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
-            m_sparse_rmq.load(in,&m_min_excess);
+            m_rmq_recursive.load(in);
             m_min_excess_idx64.load(in);
         }
 };
