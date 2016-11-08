@@ -479,8 +479,8 @@ private:
             }
             else {
                 size_type rmq_sparse_idx = m_rmq_recursive(sparse_i,sparse_j-1).first;
-                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
-                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
+                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx+1);
+                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx+1];
                 
                 size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
@@ -499,6 +499,18 @@ private:
                     else rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
                     rmq_e2_ex = m_gct_bp_support.excess(rmq_e2);
                 }
+                
+                /*size_t real = 0;
+                size_t real_ex = std::numeric_limits<size_t>::max();
+                for(size_t i = sparse_i; i < sparse_j; ++i) {
+                    if(m_min_excess[i] <= real_ex) {
+                        real_ex = m_min_excess[i];
+                        real = get_min_excess_idx(i);
+                    }
+                }
+                std::cout << (sparse_i-(i != 0)) << " " << sparse_i << " " << sparse_j-1 << " " << sparse_j << std::endl;
+                std::cout << rmq_e1 << " " << rmq_sparse << " " << real << " " << rmq_e2 << std::endl; 
+                std::cout << rmq_e1_ex << " " << rmq_sparse_ex << " " << real_ex << " " << rmq_e2_ex << std::endl; */
                 
                 auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
