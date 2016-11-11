@@ -462,6 +462,7 @@ private:
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
                 size_type rmq_e = rmq_min.first;
                 int_vector<>::value_type rmq_e_ex = rmq_min.second;
+//                 std::cout << rmq_e1_ex << " " << rmq_sparse_ex << " " << rmq_e2_ex << std::endl;
                 return ((rmq_e_ex+rmq_e)>>1);      
             }
         }*/
