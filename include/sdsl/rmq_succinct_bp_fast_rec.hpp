@@ -219,6 +219,32 @@ private:
             return 2*(i-1)-l;
         }
         
+        inline bit_vector::size_type select2(size_t i) const {
+            typedef bit_vector::size_type size_type;
+            size_type l = 0; size_type r = std::min(static_cast<size_type>(m_max_depth),static_cast<size_type>(2*(i-1))); 
+            while(r - l >= 64) {
+              size_type m = (l+r)/2 + ((l+r)&1);
+              if(m_bp_rank(2*(i-1)-m+1) < i) r = m-1;
+              else l = m;
+            }
+            size_type s_pos = 2*(i-1)-r;
+            size_type s_rank = m_bp_rank(2*(i-1)-r);
+            value_type data = m_gct_bp.get_int(s_pos,r-l);
+            /*r = r - l + 1; l = 0;
+            while(l < r) {
+              size_type m = (l+r)/2;
+              if(s_rank + bits::cnt(data & bits::lo_set[m]) < i) l = m+1;
+              else r = m;
+            }*/
+            size_type offset = 0;
+            for(; offset <= r-l; ++offset) {
+              if(s_rank == i) break;
+              if(data & (1 << offset)) s_rank++;
+            }
+//             std::cout << s_pos << " " << l << " " <<  m_bp_rank(s_pos+l) << " " << i << " " << data << std::endl;
+            return s_pos + offset - 1;
+        }
+        
         inline bit_vector::size_type naive_select(size_t j) const {
             typedef bit_vector::size_type size_type;
             size_type cnt = 0;
@@ -450,8 +476,8 @@ private:
          */
         /*size_type operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
-            size_type i     = select(l+2)-1;
-            size_type j     = select(r+2);
+            size_type i     = select2(l+2)-1;
+            size_type j     = select2(r+2);
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
             if(sparse_i >= sparse_j) {
@@ -535,15 +561,6 @@ private:
                     rmq_scan = true;
                     rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
                     rmq_e2_ex = excess(rmq_e2);
-                }
-                
-                size_t real = 0;
-                size_t real_ex = std::numeric_limits<size_t>::max();
-                for(size_t i = sparse_i; i < sparse_j; ++i) {
-                    if(m_min_excess[i] <= real_ex) {
-                        real_ex = m_min_excess[i];
-                        real = get_min_excess_idx(i);
-                    }
                 }
                 
                 auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
