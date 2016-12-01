@@ -69,7 +69,7 @@ class rmq_succinct_bp_fast_rec
         rmq_succinct_bp_fast<128,fast,t_min,true>  m_rmq_recursive;
         int_vector<>                m_min_excess_idx;
         int_vector<>                m_min_excess; 
-        int_vector<>                m_min_excess_idx64;
+        //int_vector<>                m_min_excess_idx64;
         bit_vector::value_type    m_max_depth;
 
         void copy(const rmq_succinct_bp_fast_rec& rm) {
@@ -79,7 +79,7 @@ class rmq_succinct_bp_fast_rec
             m_min_excess = rm.m_min_excess;
             m_min_excess_idx = rm.min_excess_idx;
             m_rmq_recursive = rm.m_rmq_recursive;
-            m_min_excess_idx64 = rm.m_min_excess_idx64;
+//             m_min_excess_idx64 = rm.m_min_excess_idx64;
             m_max_depth = rm.m_max_depth;
         }
 
@@ -138,8 +138,9 @@ private:
             size_type bp_size = m_gct_bp.size();
             m_min_excess = int_vector<>(bp_size/t_block_size+1,0);
             m_min_excess_idx = int_vector<>(bp_size/t_block_size+1,0);
+            bit_vector::difference_type min_rel_ex = 0;
             for(size_t i = 0; i*t_block_size < bp_size; ++i) {
-                uint64_t min_idx = fast_rmq_scan(i*t_block_size, std::min((i+1)*t_block_size - 1,bp_size-1));
+                uint64_t min_idx = near_rmq(m_gct_bp,i*t_block_size, std::min((i+1)*t_block_size - 1,bp_size-1),min_rel_ex);
                 m_min_excess_idx[i] = min_idx-i*t_block_size;
                 m_min_excess[i] = excess(min_idx);
             }
@@ -151,7 +152,7 @@ private:
         void construct_minima_for_64_bit_blocks() {
             m_max_depth = std::numeric_limits<bit_vector::value_type>::min();
             size_type bp_size = m_gct_bp.size();
-            m_min_excess_idx64 = int_vector<>(bp_size/64+1,0);
+//             m_min_excess_idx64 = int_vector<>(bp_size/64+1,0);
             size_type cur_excess = 0;
             for(size_t i = 0; i*64 < bp_size; ++i) {
                 uint64_t min_idx = 0;
@@ -165,9 +166,9 @@ private:
                     }
                     if(cur_excess > m_max_depth) m_max_depth = cur_excess;
                 }
-                m_min_excess_idx64[i] = (min_idx-i*64)/8;
+//                 m_min_excess_idx64[i] = (min_idx-i*64)/8;
             }
-            util::bit_compress(m_min_excess_idx64);
+//             util::bit_compress(m_min_excess_idx64);
         }
         
         inline std::pair<bit_vector::size_type, int_vector<>::value_type> min_ex(const bit_vector::size_type i1, const bit_vector::size_type i2, const bit_vector::size_type i3,
@@ -191,13 +192,13 @@ private:
         }
         
         
-        inline bit_vector::size_type get_min_pos_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& idx) const {
+        /*inline bit_vector::size_type get_min_pos_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& idx) const {
             typedef bit_vector::size_type size_type;
             size_type min_pos_byte_idx = idx+8*m_min_excess_idx64[block_id];
             size_type min_pos_idx = min_pos_byte_idx 
                                     + excess::data.min_pos_max[(((*(bv_data+(min_pos_byte_idx>>6)))>>(min_pos_byte_idx&0x3F))&0xFF)]; 
             return min_pos_idx;
-        }
+        }*/
         
         inline bit_vector::difference_type get_min_excess_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& min_pos) const {
             value_type min_pos_data = *(bv_data+block_id) & bits::lo_set[min_pos];
@@ -255,7 +256,7 @@ private:
             return 0;
         }
         
-        inline bit_vector::size_type fast_rmq_scan(const bit_vector::size_type l, const bit_vector::size_type r) const {
+        /*inline bit_vector::size_type fast_rmq_scan(const bit_vector::size_type l, const bit_vector::size_type r) const {
             typedef bit_vector::size_type size_type;
             typedef bit_vector::value_type value_type;
             typedef bit_vector::difference_type difference_type;
@@ -372,15 +373,15 @@ private:
             }
             
             
-            /*size_type real_min_pos = m_gct_bp_support.rmq(l,r);
-            if(real_min_pos != min_excess_pos) {
-                std::cout << "Real Min Pos: " << real_min_pos << " vs. Current Min Pos: " << min_excess_pos << std::endl;
-                abort();
-            }*/
+            //size_type real_min_pos = m_gct_bp_support.rmq(l,r);
+            //if(real_min_pos != min_excess_pos) {
+            //    std::cout << "Real Min Pos: " << real_min_pos << " vs. Current Min Pos: " << min_excess_pos << std::endl;
+            //    abort();
+            //}
             
             
             return min_excess_pos;
-        }
+        }*/
         
         
     public:
@@ -393,7 +394,7 @@ private:
         rmq_succinct_bp_fast<128,fast,t_min,true>&  rmq_recursive = m_rmq_recursive;
         const int_vector<>&                min_excess     = m_min_excess;
         const int_vector<>&                min_excess_idx = m_min_excess_idx;
-        const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
+        //const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
 
         //! Default constructor
         rmq_succinct_bp_fast_rec() {}
@@ -431,7 +432,7 @@ private:
                 m_min_excess = rm.m_min_excess;
                 m_min_excess_idx = rm.min_excess_idx;
                 m_rmq_recursive = rm.m_rmq_recursive;
-                m_min_excess_idx64 = rm.min_excess_idx64;
+//                 m_min_excess_idx64 = rm.min_excess_idx64;
                 m_max_depth = rm.m_max_depth;
             }
             return *this;
@@ -445,7 +446,7 @@ private:
                 m_min_excess = std::move(rm.m_min_excess);
                 m_min_excess_idx = std::move(rm.m_min_excess_idx);
                 m_rmq_recursive = std::move(rm.m_rmq_recursive);
-                m_min_excess_idx64 = std::move(rm.m_min_excess_idx64);
+//                 m_min_excess_idx64 = std::move(rm.m_min_excess_idx64);
                 m_max_depth = std::move(rm.m_max_depth);
             }
             return *this;
@@ -458,7 +459,7 @@ private:
             m_min_excess.swap(rm.m_min_excess);
             m_min_excess_idx.swap(rm.m_min_excess_idx);
             m_rmq_recursive.swap(rm.m_rmq_recursive);
-            m_min_excess_idx64.swap(rm.m_min_excess_idx64);
+//             m_min_excess_idx64.swap(rm.m_min_excess_idx64);
             m_max_depth = rm.m_max_depth;
         }
         
@@ -480,6 +481,7 @@ private:
             size_type j     = select2(r+2);
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
+            bit_vector::difference_type min_rel_ex = 0;
             if(sparse_i >= sparse_j) {
                 sparse_i = sparse_i-(i != 0);
                 size_type rmq_e = i;
@@ -490,7 +492,8 @@ private:
                     rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
                 }
                 if(rmq_e < i || rmq_e > j) {
-                    rmq_e = fast_rmq_scan(i,j);
+                    //rmq_e = fast_rmq_scan(i,j);
+                  rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
                 }
                 return m_bp_rank(rmq_e+1)-1;
             }
@@ -502,14 +505,16 @@ private:
                 size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
-                    rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
+                    //rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
+                    rmq_e1 = near_rmq(m_gct_bp,i,t_block_size*sparse_i,min_rel_ex);
                     rmq_e1_ex = excess(rmq_e1);
                 }
                 
                 size_type rmq_e2 = get_min_excess_idx(sparse_j);
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
-                    rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
+                    //rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
+                    rmq_e2 = near_rmq(m_gct_bp,t_block_size*sparse_j,j,min_rel_ex);
                     rmq_e2_ex = excess(rmq_e2);
                 }
                 auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
@@ -527,6 +532,7 @@ private:
             size_type j     = select(r+2);
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
+            bit_vector::difference_type min_rel_ex = 0;
             if(sparse_i >= sparse_j) {
                 sparse_i = sparse_i-(i != 0);
                 size_type rmq_e = i;
@@ -538,7 +544,8 @@ private:
                 }
                 if(rmq_e < i || rmq_e > j) {
                     rmq_scan = true;
-                    rmq_e = fast_rmq_scan(i,j);
+                    //rmq_e = fast_rmq_scan(i,j);
+                    rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
                 }
                 return std::make_pair(m_bp_rank(rmq_e+1)-1,rmq_scan);
             }
@@ -551,7 +558,8 @@ private:
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
                     rmq_scan = true;
-                    rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
+                    //rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
+                    rmq_e1 = near_rmq(m_gct_bp,i,t_block_size*sparse_i,min_rel_ex);
                     rmq_e1_ex = excess(rmq_e1);
                 }
                 
@@ -559,7 +567,8 @@ private:
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
                     rmq_scan = true;
-                    rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
+                    //rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
+                    rmq_e2 = near_rmq(m_gct_bp,t_block_size*sparse_j,j,min_rel_ex);
                     rmq_e2_ex = excess(rmq_e2);
                 }
                 
@@ -583,7 +592,7 @@ private:
             written_bytes += m_min_excess.serialize(out, child, "min_excess");             
             written_bytes += m_min_excess_idx.serialize(out, child, "min_excess_idx"); 
             written_bytes += m_rmq_recursive.serialize(out, child, "rmq_recursive");
-            written_bytes += m_min_excess_idx64.serialize(out, child, "min_excess_idx64"); 
+//             written_bytes += m_min_excess_idx64.serialize(out, child, "min_excess_idx64"); 
             written_bytes += write_member(m_max_depth, out, child, "max_depth");
             structure_tree::add_size(child, written_bytes);
             return written_bytes;
@@ -595,7 +604,7 @@ private:
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
             m_rmq_recursive.load(in);
-            m_min_excess_idx64.load(in);
+//             m_min_excess_idx64.load(in);
             read_member(m_max_depth,in);
         }
 };
