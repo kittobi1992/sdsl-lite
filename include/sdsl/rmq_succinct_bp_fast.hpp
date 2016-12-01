@@ -462,7 +462,6 @@ private:
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
                 size_type rmq_e = rmq_min.first;
                 int_vector<>::value_type rmq_e_ex = rmq_min.second;
-//                 std::cout << rmq_e1_ex << " " << rmq_sparse_ex << " " << rmq_e2_ex << std::endl;
                 return ((rmq_e_ex+rmq_e)>>1);      
             }
         }*/
@@ -489,7 +488,7 @@ private:
                     else rmq_e = fast_rmq_scan(i,j);
                 }
                 return std::make_pair(m_gct_bp_support.rank(rmq_e)-1,rmq_scan);
-            }
+            } 
             else {
                 size_type rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
                 size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);

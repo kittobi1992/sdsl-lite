@@ -149,7 +149,7 @@ private:
         }
         
         void construct_minima_for_64_bit_blocks() {
-            m_max_depth = std::numeric_limits<bit_vector::value_type>::max();
+            m_max_depth = std::numeric_limits<bit_vector::value_type>::min();
             size_type bp_size = m_gct_bp.size();
             m_min_excess_idx64 = int_vector<>(bp_size/64+1,0);
             size_type cur_excess = 0;
@@ -537,7 +537,7 @@ private:
                     rmq_e2_ex = excess(rmq_e2);
                 }
                 
-                /*size_t real = 0;
+                size_t real = 0;
                 size_t real_ex = std::numeric_limits<size_t>::max();
                 for(size_t i = sparse_i; i < sparse_j; ++i) {
                     if(m_min_excess[i] <= real_ex) {
@@ -545,9 +545,6 @@ private:
                         real = get_min_excess_idx(i);
                     }
                 }
-                std::cout << (sparse_i-(i != 0)) << " " << sparse_i << " " << sparse_j-1 << " " << sparse_j << std::endl;
-                std::cout << rmq_e1 << " " << rmq_sparse << " " << real << " " << rmq_e2 << std::endl; 
-                std::cout << rmq_e1_ex << " " << rmq_sparse_ex << " " << real_ex << " " << rmq_e2_ex << std::endl; */
                 
                 auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
