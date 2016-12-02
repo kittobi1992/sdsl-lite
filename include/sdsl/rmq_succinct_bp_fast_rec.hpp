@@ -69,8 +69,7 @@ class rmq_succinct_bp_fast_rec
         rmq_succinct_bp_fast<128,fast,t_min,true>  m_rmq_recursive;
         int_vector<>                m_min_excess_idx;
         int_vector<>                m_min_excess; 
-        //int_vector<>                m_min_excess_idx64;
-        bit_vector::value_type    m_max_depth;
+        bit_vector::value_type      m_max_excess;
 
         void copy(const rmq_succinct_bp_fast_rec& rm) {
             m_gct_bp = rm.m_gct_bp;
@@ -79,42 +78,19 @@ class rmq_succinct_bp_fast_rec
             m_min_excess = rm.m_min_excess;
             m_min_excess_idx = rm.min_excess_idx;
             m_rmq_recursive = rm.m_rmq_recursive;
-//             m_min_excess_idx64 = rm.m_min_excess_idx64;
-            m_max_depth = rm.m_max_depth;
+            m_max_excess = rm.m_max_excess;
         }
 
         
 private:
         
         template<class t_rac>
-        void construct_generalized_cartesian_tree_rightmost(const t_rac* v) {
-            if(v->size() > 0) {
-                int64_t cur_pos = v->size()-1;
-                int64_t bp_cur_pos = m_gct_bp.size()-1;
-                std::stack<typename t_rac::value_type> s;
-                s.push(std::numeric_limits<typename t_rac::value_type>::min()); 
-                m_gct_bp[bp_cur_pos--] = 0;
-                while(cur_pos >= 0) {
-                    typename t_rac::value_type cur_elem = (*v)[cur_pos--];
-                    while(s.top() >= cur_elem) {
-                        s.pop();
-                        m_gct_bp[bp_cur_pos--] = 1;
-                    }
-                    bp_cur_pos--;
-                    s.push(cur_elem);
-                }
-                while(!s.empty()) {
-                    s.pop();
-                    m_gct_bp[bp_cur_pos--] = 1;
-                }
-            }
-        }
-        
-        template<class t_rac>
         void construct_generalized_cartesian_tree_leftmost(const t_rac* v) {
             if(v->size() > 0) {
                 size_t cur_pos = 0;
                 size_t bp_cur_pos = 0;
+                size_t cur_excess = 1;
+                m_max_excess = std::numeric_limits<bit_vector::value_type>::min();
                 std::stack<typename t_rac::value_type> s;
                 s.push(std::numeric_limits<typename t_rac::value_type>::min()); 
                 m_gct_bp[bp_cur_pos++] = 1;
@@ -122,10 +98,12 @@ private:
                     typename t_rac::value_type cur_elem = (*v)[cur_pos++];
                     while(s.top() > cur_elem) {
                         s.pop();
-                        bp_cur_pos++;
+                        bp_cur_pos++; cur_excess--;
                     }
+                    cur_excess++;
                     m_gct_bp[bp_cur_pos++] = 1;
                     s.push(cur_elem);
+                    if(cur_excess > m_max_excess) m_max_excess = cur_excess;
                 }
                 while(!s.empty()) {
                     s.pop();
@@ -134,7 +112,7 @@ private:
             }
         }
         
-        void construct_sparse_table_over_sampled_excess_value_of_bp() {
+        void construct_minimum_excess_rmq() {
             size_type bp_size = m_gct_bp.size();
             m_min_excess = int_vector<>(bp_size/t_block_size+1,0);
             m_min_excess_idx = int_vector<>(bp_size/t_block_size+1,0);
@@ -147,28 +125,6 @@ private:
             m_rmq_recursive = rmq_succinct_bp_fast<128,fast,t_min,true>(&m_min_excess);
             util::bit_compress(m_min_excess);
             util::bit_compress(m_min_excess_idx);
-        }
-        
-        void construct_minima_for_64_bit_blocks() {
-            m_max_depth = std::numeric_limits<bit_vector::value_type>::min();
-            size_type bp_size = m_gct_bp.size();
-//             m_min_excess_idx64 = int_vector<>(bp_size/64+1,0);
-            size_type cur_excess = 0;
-            for(size_t i = 0; i*64 < bp_size; ++i) {
-                uint64_t min_idx = 0;
-                size_type min_excess = std::numeric_limits<size_type>::max();
-                for(size_t j = i*64; j <= std::min((i+1)*64 - 1,bp_size-1); ++j) {
-                    if(m_gct_bp[j]) cur_excess++;
-                    else cur_excess--;
-                    if(cur_excess <= min_excess) {
-                        min_idx = j;
-                        min_excess = cur_excess;
-                    }
-                    if(cur_excess > m_max_depth) m_max_depth = cur_excess;
-                }
-//                 m_min_excess_idx64[i] = (min_idx-i*64)/8;
-            }
-//             util::bit_compress(m_min_excess_idx64);
         }
         
         inline std::pair<bit_vector::size_type, int_vector<>::value_type> min_ex(const bit_vector::size_type i1, const bit_vector::size_type i2, const bit_vector::size_type i3,
@@ -191,38 +147,15 @@ private:
             return m_min_excess_idx[i] + i * t_block_size;
         }
         
-        
-        /*inline bit_vector::size_type get_min_pos_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& idx) const {
-            typedef bit_vector::size_type size_type;
-            size_type min_pos_byte_idx = idx+8*m_min_excess_idx64[block_id];
-            size_type min_pos_idx = min_pos_byte_idx 
-                                    + excess::data.min_pos_max[(((*(bv_data+(min_pos_byte_idx>>6)))>>(min_pos_byte_idx&0x3F))&0xFF)]; 
-            return min_pos_idx;
-        }*/
-        
-        inline bit_vector::difference_type get_min_excess_in_64bit_word(const uint64_t *bv_data, const bit_vector::size_type& block_id, const bit_vector::size_type& min_pos) const {
-            value_type min_pos_data = *(bv_data+block_id) & bits::lo_set[min_pos];
-            return (bits::cnt(min_pos_data)<<1) - min_pos;           
-        }
-        
+    
         inline int_vector<>::value_type excess(size_t i) const {
             return (m_bp_rank(i+1)<<1)-(i+1);
         }
         
+        
         inline bit_vector::size_type select(size_t i) const {
             typedef bit_vector::size_type size_type;
-            size_type l = 0; size_type r = std::min(static_cast<size_type>(m_max_depth),static_cast<size_type>(2*(i-1))); //TODO: Calculate max depth of cartesian tree
-            while(l < r) {
-                size_type m = (l+r)/2 + ((l+r)&1);
-                if(m_bp_rank(2*(i-1)-m+1) < i) r = m-1;
-                else l = m;
-            }
-            return 2*(i-1)-l;
-        }
-        
-        inline bit_vector::size_type select2(size_t i) const {
-            typedef bit_vector::size_type size_type;
-            size_type l = 0; size_type r = std::min(static_cast<size_type>(m_max_depth),static_cast<size_type>(2*(i-1))); 
+            size_type l = 0; size_type r = std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(i-1))); 
             while(r - l >= 64) {
               size_type m = (l+r)/2 + ((l+r)&1);
               if(m_bp_rank(2*(i-1)-m+1) < i) r = m-1;
@@ -231,157 +164,21 @@ private:
             size_type s_pos = 2*(i-1)-r;
             size_type s_rank = m_bp_rank(2*(i-1)-r);
             value_type data = m_gct_bp.get_int(s_pos,r-l);
-            /*r = r - l + 1; l = 0;
+            r = r - l + 1; l = 0;
             while(l < r) {
               size_type m = (l+r)/2;
               if(s_rank + bits::cnt(data & bits::lo_set[m]) < i) l = m+1;
               else r = m;
-            }*/
-            size_type offset = 0;
+            }
+            /*size_type offset = 0;
             for(; offset <= r-l; ++offset) {
               if(s_rank == i) break;
               if(data & (1 << offset)) s_rank++;
-            }
-//             std::cout << s_pos << " " << l << " " <<  m_bp_rank(s_pos+l) << " " << i << " " << data << std::endl;
-            return s_pos + offset - 1;
+            }*/
+            return s_pos + l - 1;
         }
+    
         
-        inline bit_vector::size_type naive_select(size_t j) const {
-            typedef bit_vector::size_type size_type;
-            size_type cnt = 0;
-            for(size_t i = 0; i < m_gct_bp.size(); ++i) {
-                if(m_gct_bp[i]) cnt++;
-                if(cnt == j) return i;
-            }
-            return 0;
-        }
-        
-        /*inline bit_vector::size_type fast_rmq_scan(const bit_vector::size_type l, const bit_vector::size_type r) const {
-            typedef bit_vector::size_type size_type;
-            typedef bit_vector::value_type value_type;
-            typedef bit_vector::difference_type difference_type;
-            
-            
-            const size_type l64 = ((l+64)/64)*64;
-            const size_type r64 = (r/64)*64;
-            difference_type cur_excess = 0;
-            difference_type min_excess = 0;
-            size_type min_excess_pos = l;
-            const uint64_t* b = m_gct_bp.data();
-            
-//               std::cout << l << " " << l64 << " " << r64 << " " << r << " ("<<(l%64) << ","<< (l64%64) << "," << (r64%64)<<","<<(r%63) << ")" << std::endl;
-            size_type min_pos_in_first_block = get_min_pos_in_64bit_word(b,l>>6,(l/64)*64);
-            if(min_pos_in_first_block < l || min_pos_in_first_block > std::min(l64,r)) { 
-                size_type l8 = (((l+1)+7)/8)*8;
-                size_type r8 = (r/8)*8;
-                
-                //If l start inside an 8-bit value, we have determine the
-                //excess value until the border of first 8-bit word inside (l,r)
-                for(size_type i = l+1; i < std::min(l8,r+1); ++i) {
-                    if(m_gct_bp[i]) ++cur_excess;
-                    else {
-                        --cur_excess;
-                        if(cur_excess <= min_excess) {
-                            min_excess_pos = i;
-                            min_excess = cur_excess;
-                        }
-                    }
-                }
-                
-                for(size_type i = l8; i < std::min(r8,l64); i += 8) {
-                    uint8_t val = (((*(b+(i>>6)))>>(i&0x3F))&0xFF);
-                    difference_type x = excess::data.min[val];
-                    if(cur_excess+x <= min_excess) {
-                        min_excess = cur_excess+x;
-                        min_excess_pos = i + excess::data.min_pos_max[val];
-                    }
-                    cur_excess += excess::data.word_sum[val];
-                }
-                
-                //Special case: If l starts in an 8-bit word and r end in the
-                //following 8-bit word.
-                for(size_type i = std::max(l8,r8); i < std::min(l64,r+1); ++i) {
-                    if(m_gct_bp[i]) ++cur_excess;
-                    else {
-                        --cur_excess;
-                        if(cur_excess <= min_excess) {
-                            min_excess_pos = i;
-                            min_excess = cur_excess;
-                        }
-                    }
-                }
-                
-            }
-            else {
-                min_excess_pos = min_pos_in_first_block;
-                min_excess = get_min_excess_in_64bit_word(b,l>>6,min_excess_pos-(l/64)*64+1);
-                cur_excess += (bits::cnt(*(b+(l>>6)))<<1)-64;
-            }
-            
-            
-            //Scanning 64-bit words for min excess
-            for(size_type i = l64; i < r64; i+=64) {
-                size_type cur_block = i>>6;
-                size_type min_pos_idx = get_min_pos_in_64bit_word(b,cur_block,i);
-                difference_type tmp_min_excess = cur_excess + get_min_excess_in_64bit_word(b,cur_block,min_pos_idx-i+1);
-                if(tmp_min_excess <= min_excess) {
-                     min_excess_pos = min_pos_idx;
-                     min_excess = tmp_min_excess;
-                }
-                cur_excess += (bits::cnt(*(b+cur_block))<<1)-64;
-            }
-            
-            
-            size_type last_block = std::max(l64,r64);
-            if(last_block <= r) {
-                size_type min_pos_in_last_block = get_min_pos_in_64bit_word(b,last_block>>6,(last_block/64)*64);
-                if(min_pos_in_last_block > r) {
-                
-                    size_type r8 = (r/8)*8;
-                
-                    for(size_type i = last_block; i < r8; i += 8) {
-                        uint8_t val = (((*(b+(i>>6)))>>(i&0x3F))&0xFF);
-                        difference_type x = excess::data.min[val];
-                        if(cur_excess+x <= min_excess) {
-                            min_excess = cur_excess+x;
-                            min_excess_pos = i + excess::data.min_pos_max[val];
-                        }
-                        cur_excess += excess::data.word_sum[val];
-                    }
-                
-                    //If r ends inside an 8-bit value, we have determine the
-                    //excess value until the border of last 8-bit word inside (l,r)
-                    for(size_type i = std::max(r8,last_block); i < r+1; ++i) {
-                        if(m_gct_bp[i]) ++cur_excess;
-                        else {
-                            --cur_excess;
-                            if(cur_excess <= min_excess) {
-                                min_excess_pos = i;
-                                min_excess = cur_excess;
-                            }
-                        }
-                    }
-                
-                }
-                else {
-                    difference_type tmp_min_excess = cur_excess + get_min_excess_in_64bit_word(b,last_block>>6,min_pos_in_last_block-(last_block/64)*64+1);
-                    if(tmp_min_excess <= min_excess) {
-                        min_excess_pos = min_pos_in_last_block;
-                        min_excess = tmp_min_excess;
-                    }
-                }
-            }
-            
-            
-            //size_type real_min_pos = m_gct_bp_support.rmq(l,r);
-            //if(real_min_pos != min_excess_pos) {
-            //    std::cout << "Real Min Pos: " << real_min_pos << " vs. Current Min Pos: " << min_excess_pos << std::endl;
-            //    abort();
-            //}
-            
-            
-            return min_excess_pos;
-        }*/
         
         
     public:
@@ -408,9 +205,8 @@ private:
             if (v != nullptr) {
                 m_gct_bp = bit_vector(2*v->size()+2,0);
                 construct_generalized_cartesian_tree_leftmost(v);
-                construct_minima_for_64_bit_blocks();
                 m_bp_rank = t_rank(&m_gct_bp); 
-                construct_sparse_table_over_sampled_excess_value_of_bp();
+                construct_minimum_excess_rmq();
             }
         }
 
@@ -432,8 +228,7 @@ private:
                 m_min_excess = rm.m_min_excess;
                 m_min_excess_idx = rm.min_excess_idx;
                 m_rmq_recursive = rm.m_rmq_recursive;
-//                 m_min_excess_idx64 = rm.min_excess_idx64;
-                m_max_depth = rm.m_max_depth;
+                m_max_excess = rm.m_max_excess;
             }
             return *this;
         }
@@ -446,8 +241,7 @@ private:
                 m_min_excess = std::move(rm.m_min_excess);
                 m_min_excess_idx = std::move(rm.m_min_excess_idx);
                 m_rmq_recursive = std::move(rm.m_rmq_recursive);
-//                 m_min_excess_idx64 = std::move(rm.m_min_excess_idx64);
-                m_max_depth = std::move(rm.m_max_depth);
+                m_max_excess = std::move(rm.m_max_excess);
             }
             return *this;
         }
@@ -459,8 +253,7 @@ private:
             m_min_excess.swap(rm.m_min_excess);
             m_min_excess_idx.swap(rm.m_min_excess_idx);
             m_rmq_recursive.swap(rm.m_rmq_recursive);
-//             m_min_excess_idx64.swap(rm.m_min_excess_idx64);
-            m_max_depth = rm.m_max_depth;
+            m_max_excess = rm.m_max_excess;
         }
         
 
@@ -477,8 +270,8 @@ private:
          */
         /*size_type operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
-            size_type i     = select2(l+2)-1;
-            size_type j     = select2(r+2);
+            size_type i     = select(l+2)-1;
+            size_type j     = select(r+2);
             size_type sparse_i = (i+t_block_size-1)/t_block_size;
             size_type sparse_j = j/t_block_size;
             bit_vector::difference_type min_rel_ex = 0;
@@ -492,7 +285,6 @@ private:
                     rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
                 }
                 if(rmq_e < i || rmq_e > j) {
-                    //rmq_e = fast_rmq_scan(i,j);
                   rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
                 }
                 return m_bp_rank(rmq_e+1)-1;
@@ -505,7 +297,6 @@ private:
                 size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
-                    //rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
                     rmq_e1 = near_rmq(m_gct_bp,i,t_block_size*sparse_i,min_rel_ex);
                     rmq_e1_ex = excess(rmq_e1);
                 }
@@ -513,7 +304,6 @@ private:
                 size_type rmq_e2 = get_min_excess_idx(sparse_j);
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
-                    //rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
                     rmq_e2 = near_rmq(m_gct_bp,t_block_size*sparse_j,j,min_rel_ex);
                     rmq_e2_ex = excess(rmq_e2);
                 }
@@ -544,7 +334,6 @@ private:
                 }
                 if(rmq_e < i || rmq_e > j) {
                     rmq_scan = true;
-                    //rmq_e = fast_rmq_scan(i,j);
                     rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
                 }
                 return std::make_pair(m_bp_rank(rmq_e+1)-1,rmq_scan);
@@ -558,7 +347,6 @@ private:
                 i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
                     rmq_scan = true;
-                    //rmq_e1 = fast_rmq_scan(i,t_block_size*sparse_i);
                     rmq_e1 = near_rmq(m_gct_bp,i,t_block_size*sparse_i,min_rel_ex);
                     rmq_e1_ex = excess(rmq_e1);
                 }
@@ -567,7 +355,6 @@ private:
                 i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
                     rmq_scan = true;
-                    //rmq_e2 = fast_rmq_scan(t_block_size*sparse_j,j);
                     rmq_e2 = near_rmq(m_gct_bp,t_block_size*sparse_j,j,min_rel_ex);
                     rmq_e2_ex = excess(rmq_e2);
                 }
@@ -592,8 +379,7 @@ private:
             written_bytes += m_min_excess.serialize(out, child, "min_excess");             
             written_bytes += m_min_excess_idx.serialize(out, child, "min_excess_idx"); 
             written_bytes += m_rmq_recursive.serialize(out, child, "rmq_recursive");
-//             written_bytes += m_min_excess_idx64.serialize(out, child, "min_excess_idx64"); 
-            written_bytes += write_member(m_max_depth, out, child, "max_depth");
+            written_bytes += write_member(m_max_excess, out, child, "max_depth");
             structure_tree::add_size(child, written_bytes);
             return written_bytes;
         }
@@ -604,8 +390,7 @@ private:
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
             m_rmq_recursive.load(in);
-//             m_min_excess_idx64.load(in);
-            read_member(m_max_depth,in);
+            read_member(m_max_excess,in);
         }
 };
 
