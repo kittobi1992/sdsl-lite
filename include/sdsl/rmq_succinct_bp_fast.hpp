@@ -419,7 +419,7 @@ private:
          * \par Time complexity
          *      \f$ \Order{1} \f$
          */
-        /*size_type operator()(const size_type l, const size_type r)const {
+        size_type operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
             size_type i     = m_gct_bp_support.select(l+2)-1;
             size_type j     = m_gct_bp_support.select(r+2);
@@ -464,9 +464,9 @@ private:
                 int_vector<>::value_type rmq_e_ex = rmq_min.second;
                 return ((rmq_e_ex+rmq_e)>>1);      
             }
-        }*/
+        }
         
-        std::pair<size_type,bool> operator()(const size_type l, const size_type r)const {
+        /*std::pair<size_type,bool> operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
             bool rmq_scan = false;
             size_type i     = m_gct_bp_support.select(l+2)-1;
@@ -518,7 +518,7 @@ private:
                 size_type rmq_e_ex = rmq_min.second;
                 return std::make_pair((rmq_e_ex+rmq_e)/2-1,rmq_scan);      
             }
-        }
+        }*/
 
         size_type size()const {
             return (m_gct_bp.size()-2)/2;

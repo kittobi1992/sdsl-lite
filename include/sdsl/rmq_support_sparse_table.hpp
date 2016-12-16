@@ -82,7 +82,8 @@ class rmq_support_sparse_table
             if (n < 2)  // for n<2 the queries could be answerd without any table
                 return;
             size_type k=0;
-            while (2*(1ULL<<k) < n) ++k;  // calculate maximal
+            //TODO: Should less equal 
+            while (2*(1ULL<<k) <= n) ++k;  // calculate maximal
             m_table.resize(k);
             m_k = k;
             for (size_type i=0; i<k; ++i) {
