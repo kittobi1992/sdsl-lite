@@ -90,6 +90,8 @@ class rmq_succinct_bp_fast_rec
 
         
 private:
+    template<class t_rac>
+    rmq_succinct_bp_fast_rec() { }
         
         template<class t_rac>
         void construct_generalized_cartesian_tree_leftmost(const t_rac* v) {
@@ -108,13 +110,13 @@ private:
                     if(t_block_size == 0) {
                         while(s.top() >= cur_elem && s.size() > 1) {
                             s.pop();
-                            bp_cur_pos++;
+                            bp_cur_pos++; cur_excess--;
                         }
                     }
                     else {
                         while(s.top() > cur_elem && s.size() > 1) {
                             s.pop();
-                            bp_cur_pos++;
+                            bp_cur_pos++; cur_excess--;
                         }                        
                     }
                     cur_excess++;
@@ -445,7 +447,7 @@ private:
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
             if(t_block_size > 0) {
-                m_rmq_recursive = new rmq_succinct_bp_fast_rec<t_block_size,0>(&m_min_excess);
+                m_rmq_recursive = new rmq_succinct_bp_fast_rec<t_block_size,0>();
                 m_rmq_recursive->load(in);
             }
             else {

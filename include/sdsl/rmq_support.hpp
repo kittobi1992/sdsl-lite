@@ -23,23 +23,31 @@
 
 /** \defgroup rmq_group Range Minimum/Maximum Support (RMS) */
 
-template<class RandomAccessContainer, bool Minimum>	 // for range minimum queries
+template<class RandomAccessContainer, bool Minimum, bool t_strict>	 // for range minimum queries with strict compare
 struct min_max_trait {
-    static inline bool strict_compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
+    static inline bool compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
         return v1 < v2;
     }
+};
+
+template<class RandomAccessContainer> // for range minimum queries with less equal compare
+struct min_max_trait<RandomAccessContainer, true, false> {
     static inline bool compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
         return v1 <= v2;
     }
 };
 
-template<class RandomAccessContainer> // for range maximum queries
-struct min_max_trait<RandomAccessContainer, false> {
-    static inline bool strict_compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
-        return v1 > v2;
-    }
+template<class RandomAccessContainer> // for range maximum queries with greater equal compare
+struct min_max_trait<RandomAccessContainer, false, false> {
     static inline bool compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
         return v1 >= v2;
+    }
+};
+
+template<class RandomAccessContainer> // for range maximum queries with strict compare
+struct min_max_trait<RandomAccessContainer, false, true> {
+    static inline bool compare(const typename RandomAccessContainer::value_type v1, const typename RandomAccessContainer::value_type v2) {
+        return v1 > v2;
     }
 };
 
