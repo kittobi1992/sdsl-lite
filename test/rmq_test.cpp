@@ -25,8 +25,8 @@ typedef Types<sdsl::rmq_succinct_sct<>,
         sdsl::rmq_succinct_sada<>,
         sdsl::rmq_succinct_bp<>,
         sdsl::rmq_succinct_bp_fast<>,
-        sdsl::rmq_succinct_bp_fast_rec<>,
-        sdsl::rmq_succinct_bp_fast_rec<1024> > Implementations;
+        sdsl::rmq_succinct_rec<>,
+        sdsl::rmq_succinct_rec<1024> > Implementations;
 
 TYPED_TEST_CASE(rmq_test, Implementations);
 

@@ -14,12 +14,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
-/*! \file rmq_succinct_bp_fast_rec.hpp
-    \brief rmq_succinct_bp_fast_rec.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
+/*! \file rmq_succinct_rec.hpp
+    \brief rmq_succinct_rec.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
     \author Tobias Heuer
 */
-#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST_REC
-#define INCLUDED_SDSL_RMQ_SUCCINCT_BP_FAST_REC
+#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_REC
+#define INCLUDED_SDSL_RMQ_SUCCINCT_REC
 
 #include <stack>
 #include <limits>
@@ -39,11 +39,11 @@ namespace sdsl
 
 template<uint32_t t_super_block_size=512,uint32_t t_block_size=128, bool t_min = true,
          class t_rank = rank_support_v5<> >
-class rmq_succinct_bp_fast_rec;
+class rmq_succinct_rec;
 
 template<uint32_t t_super_block_size=512, uint32_t t_block_size=128, class t_rank = rank_support_v5<> >
 struct range_maximum_bp_fast_rec {
-    typedef rmq_succinct_bp_fast_rec<t_super_block_size, t_block_size, false> type;
+    typedef rmq_succinct_rec<t_super_block_size, t_block_size, false> type;
 };
 
 //! A class to support range minimum or range maximum queries on a random access container.
@@ -63,16 +63,16 @@ struct range_maximum_bp_fast_rec {
  * 
  */
 template<uint32_t t_super_block_size, uint32_t t_block_size, bool t_min, class t_rank>
-class rmq_succinct_bp_fast_rec
+class rmq_succinct_rec
 {
         bit_vector                  m_gct_bp;         //!< A bit vector which contains the BP-GT of the input container.
         int_vector<>                m_min_excess_idx;
         int_vector<>                m_min_excess; 
         rmq_support_sparse_table<>  m_sparse_rmq;
-        rmq_succinct_bp_fast_rec<t_block_size,0>*  m_rmq_recursive;
-        rank_select_support_bp      m_rank_select;
+        rmq_succinct_rec<t_block_size,0>*  m_rmq_recursive;
+        rank_select_support_bp<>      m_rank_select;
 
-        void copy(const rmq_succinct_bp_fast_rec& rm) {
+        void copy(const rmq_succinct_rec& rm) {
             m_gct_bp = rm.m_gct_bp;
             m_rank_select = rm.m_rank_select;
             m_rank_select.set_vector(&m_gct_bp);
@@ -90,7 +90,7 @@ class rmq_succinct_bp_fast_rec
         
 private:
     template<class t_rac>
-    rmq_succinct_bp_fast_rec() { }
+    rmq_succinct_rec() { }
         
         template<class t_rac>
         void construct_generalized_cartesian_tree_leftmost(const t_rac* v) {
@@ -137,7 +137,7 @@ private:
                 m_min_excess[i] = m_rank_select.excess(min_idx);
             }
             if(t_block_size > 0) {
-                m_rmq_recursive = new rmq_succinct_bp_fast_rec<t_block_size,0>(&m_min_excess);
+                m_rmq_recursive = new rmq_succinct_rec<t_block_size,0>(&m_min_excess);
             }
             else {
                 m_sparse_rmq = rmq_support_sparse_table<>(&m_min_excess);
@@ -176,42 +176,42 @@ private:
         typedef typename int_vector<>::value_type i_value_type;
 
         const bit_vector&                  gct_bp         = m_gct_bp;
-        rmq_succinct_bp_fast_rec<t_block_size,0>* rmq_recursive = m_rmq_recursive;
+        rmq_succinct_rec<t_block_size,0>* rmq_recursive = m_rmq_recursive;
         const rmq_support_sparse_table<>&  sparse_rmq     = m_sparse_rmq;
         const int_vector<>&                min_excess     = m_min_excess;
         const int_vector<>&                min_excess_idx = m_min_excess_idx;
-        const rank_select_support_bp       rank_select    = m_rank_select;
+        const rank_select_support_bp<>       rank_select    = m_rank_select;
         //const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
 
         //! Default constructor
-        rmq_succinct_bp_fast_rec() {}
+        rmq_succinct_rec() {}
 
         //! Constructor
         /*! \tparam t_rac A random access container.
          *  \param  v     Pointer to container object.
          */
         template<class t_rac>
-        rmq_succinct_bp_fast_rec(const t_rac* v=nullptr) {
+        rmq_succinct_rec(const t_rac* v=nullptr) {
             if (v != nullptr) {
                 //TODO: Use construct_supercartesian_tree_bp_succinct in suffix_tree_helper.hpp
                 m_gct_bp = bit_vector(2*v->size()+2,0);
                 construct_generalized_cartesian_tree_leftmost(v);
-                m_rank_select = rank_select_support_bp(&m_gct_bp);
+                m_rank_select = rank_select_support_bp<>(&m_gct_bp);
                 construct_minimum_excess_rmq();
             }
         }
 
         //! Copy constructor
-        rmq_succinct_bp_fast_rec(const rmq_succinct_bp_fast_rec& rm) {
+        rmq_succinct_rec(const rmq_succinct_rec& rm) {
             *this = rm;
         }
 
         //! Move constructor
-        rmq_succinct_bp_fast_rec(rmq_succinct_bp_fast_rec&& rm) {
+        rmq_succinct_rec(rmq_succinct_rec&& rm) {
             *this = std::move(rm);
         }
 
-        rmq_succinct_bp_fast_rec& operator=(const rmq_succinct_bp_fast_rec& rm) {
+        rmq_succinct_rec& operator=(const rmq_succinct_rec& rm) {
             if (this != &rm) {
                 m_gct_bp = rm.m_gct_bp;
                 m_rank_select = rm.m_rank_select;
@@ -229,7 +229,7 @@ private:
             return *this;
         }
 
-        rmq_succinct_bp_fast_rec& operator=(rmq_succinct_bp_fast_rec&& rm) {
+        rmq_succinct_rec& operator=(rmq_succinct_rec&& rm) {
             if (this != &rm) {
                 m_gct_bp = std::move(rm.m_gct_bp); 
                 m_rank_select = std::move(rm.m_rank_select);
@@ -247,7 +247,7 @@ private:
             return *this;
         }
 
-        void swap(rmq_succinct_bp_fast_rec& rm) {
+        void swap(rmq_succinct_rec& rm) {
             m_gct_bp.swap(rm.m_gct_bp);
             util::swap_support(m_rank_select, rm.m_rank_select,
                                &m_gct_bp, &(rm.m_gct_bp));                
@@ -408,7 +408,7 @@ private:
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
             if(t_block_size > 0) {
-                m_rmq_recursive = new rmq_succinct_bp_fast_rec<t_block_size,0>();
+                m_rmq_recursive = new rmq_succinct_rec<t_block_size,0>();
                 m_rmq_recursive->load(in);
             }
             else {

@@ -27,6 +27,7 @@
 #include "rank_support_v5.hpp"
 #include "int_vector.hpp"
 #include "bits.hpp"
+#include "util.hpp"
 
 //! Namespace for the succinct data structure library.
 namespace sdsl
@@ -38,11 +39,13 @@ namespace sdsl
      * 
      * 
      */
+    template<uint32_t t_sample_size = 1024>
     class rank_select_support_bp
     {
         
         const bit_vector*           m_v;
         rank_support_v5<>           m_bp_rank;
+        int_vector<>                m_select_sample;
         bit_vector::value_type      m_max_excess;
         
         
@@ -50,6 +53,7 @@ namespace sdsl
             m_v = rm.m_v;
             m_bp_rank = rm.m_bp_rank;
             m_bp_rank.set_vector(m_v);
+            m_select_sample = rm.m_select_sample;
             m_max_excess = rm.m_max_excess;
         }
         
@@ -64,7 +68,18 @@ namespace sdsl
                 else cur_excess--;
                 if(cur_excess > m_max_excess) m_max_excess = cur_excess;
             }
-        }                                                                  
+            if(m_v->size() <= 2) m_max_excess = 1;
+        }        
+        
+        void generate_select_sample() {
+            size_t N = m_v->size()/2;
+            m_select_sample = int_vector<>(N/t_sample_size+2,0);
+            for(size_t i = 1; i < N; i += t_sample_size) {
+                m_select_sample[i/t_sample_size] = select(i,false);
+            }
+            m_select_sample[N/t_sample_size+1] = select(N,false);
+            util::bit_compress(m_select_sample);
+        }
                                                                                  
                                                                                  
     public:
@@ -80,6 +95,9 @@ namespace sdsl
                 set_vector(v);
                 m_bp_rank = rank_support_v5<>(v);
                 calculate_maximum_excess_value();
+                if(m_max_excess > t_sample_size) {
+                    generate_select_sample();
+                }
             }
         }
         
@@ -98,6 +116,7 @@ namespace sdsl
                 m_v = rm.m_v;
                 m_bp_rank = rm.m_bp_rank;
                 m_bp_rank.set_vector(m_v);
+                m_select_sample = rm.m_select_sample;
                 m_max_excess = rm.m_max_excess;
             }
             return *this;
@@ -108,6 +127,7 @@ namespace sdsl
                 m_v = std::move(rm.m_v);
                 m_bp_rank = std::move(rm.m_bp_rank);
                 m_bp_rank.set_vector(m_v);
+                m_select_sample = std::move(rm.m_select_sample);
                 m_max_excess = std::move(rm.m_max_excess);
             }
             return *this;
@@ -121,16 +141,26 @@ namespace sdsl
             return m_bp_rank.rank(idx);
         }
         
-        inline size_type select(size_type idx) const {
-            size_type l = 0; size_type r = std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); 
+        inline size_type select(size_type idx, bool use_select_samples=true) const {
+            size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
+            if(use_select_samples && m_max_excess > t_sample_size) {
+                size_t sample_idx = idx/t_sample_size;
+                
+                //std::cout << idx << " " <<  l << " " << r << " " << sample_idx <<  std::endl;
+                l = std::max(l,m_select_sample[sample_idx]);
+                r = std::min(r,m_select_sample[sample_idx+1]);
+                //std::cout << idx << " " <<  l << " " << r << " " << sample_idx <<  std::endl;
+                //std::cout << "----------------------------" << std::endl;
+                //std::cout << idx << " " <<  l << " " << r << " " << m_max_excess << " " << select_sample_pos << " " << (2*(idx-1)-select_sample_pos) << std::endl;
+            }
             while(r - l >= 64) {
-                size_type m = (l+r)/2 + ((l+r)&1);
-                if(m_bp_rank(2*(idx-1)-m+1) < idx) r = m-1;
-                else l = m;
+                size_type m = (l+r)/2;
+                if(m_bp_rank(m) < idx) l = m+1;
+                else r = m;
             }
             
-            size_type s_pos = 2*(idx-1)-r;
-            size_type s_rank = m_bp_rank(2*(idx-1)-r);
+            size_type s_pos = l;
+            size_type s_rank = m_bp_rank(s_pos);
             value_type data = m_v->get_int(s_pos,r-l);
             r = r - l + 1; l = 0;
             while(l < r) {
@@ -145,6 +175,7 @@ namespace sdsl
         
         void swap(rank_select_support_bp& rm) {
             m_bp_rank.swap(rm.m_bp_rank); 
+            m_select_sample.swap(rm.m_select_sample);
             m_max_excess = rm.m_max_excess;
         }
         
@@ -153,6 +184,7 @@ namespace sdsl
             structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
             size_type written_bytes = 0;
             written_bytes += m_bp_rank.serialize(out, child, "bp_rank");
+            written_bytes += m_select_sample.serialize(out, child, "select_sample");
             written_bytes += write_member(m_max_excess, out, child, "max_depth");
             structure_tree::add_size(child, written_bytes);
             return written_bytes;
@@ -160,6 +192,7 @@ namespace sdsl
         
         void load(std::istream& in, const bit_vector* v=nullptr) {
             m_bp_rank.load(in,v);
+            m_select_sample.load(in);
             read_member(m_max_excess,in);
             set_vector(v);
         }
