@@ -145,13 +145,8 @@ namespace sdsl
             size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
             if(use_select_samples && m_max_excess > t_sample_size) {
                 size_t sample_idx = idx/t_sample_size;
-                
-                //std::cout << idx << " " <<  l << " " << r << " " << sample_idx <<  std::endl;
                 l = std::max(l,m_select_sample[sample_idx]);
                 r = std::min(r,m_select_sample[sample_idx+1]);
-                //std::cout << idx << " " <<  l << " " << r << " " << sample_idx <<  std::endl;
-                //std::cout << "----------------------------" << std::endl;
-                //std::cout << idx << " " <<  l << " " << r << " " << m_max_excess << " " << select_sample_pos << " " << (2*(idx-1)-select_sample_pos) << std::endl;
             }
             while(r - l >= 64) {
                 size_type m = (l+r)/2;

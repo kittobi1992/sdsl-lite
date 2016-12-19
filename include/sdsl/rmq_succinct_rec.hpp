@@ -200,6 +200,12 @@ private:
                 construct_minimum_excess_rmq();
             }
         }
+        
+        ~rmq_succinct_rec() {
+            if (t_block_size > 0 && m_rmq_recursive) {
+                delete m_rmq_recursive;
+            }
+        }
 
         //! Copy constructor
         rmq_succinct_rec(const rmq_succinct_rec& rm) {
