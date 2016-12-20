@@ -33,15 +33,102 @@
 #include "suffix_tree_helper.hpp"
 #include "util.hpp"
 
+//#define MEASURE_TIMINGS
+
+#ifdef MEASURE_TIMINGS  
+using MeasurePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
+MeasurePoint start, end;
+
+#define MICRO 1000000
+inline MeasurePoint measure_point() {
+    return std::chrono::high_resolution_clock::now();
+}
+
+double ms() {
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    return elapsed_seconds.count()*MICRO;
+}
+
+class Stats {
+private:
+    using StatsMap = std::map<std::string, double>;
+    
+public:
+    Stats(const Stats&) = delete;
+    Stats(Stats&&) = delete;
+    Stats& operator= (const Stats&) = delete;
+    Stats& operator= (Stats&&) = delete;
+    
+    void add(const std::string& key, double value) {
+        _stats[key] += value;
+    }
+    
+    void addToTotal(const std::string& key, double value) {
+        _stats[key] += value;
+    }
+    
+    
+    std::string toStringAndClear() {
+        std::ostringstream s;
+        for (auto& stat : _stats) {
+            s << " " << stat.first << "=" << stat.second;
+        }
+        reset();
+        return s.str();
+    }
+    
+    void reset() {
+        _stats.clear();
+        for(std::string& key : keys) {
+            addToTotal(key,0.0);
+        }
+    }
+    
+    static Stats & instance() {
+        static Stats instance;
+        return instance;
+    }
+    
+    
+private:
+    Stats() :
+    _stats() { }
+    StatsMap _stats;
+    std::vector<std::string> keys = {"Rank","Recursive_RMQ","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx"};
+};
+
+
+#define TIME_MEASURE(X,key)                                \
+    start = measure_point();                               \
+    X                                                      \
+    end = measure_point();                                 \
+    Stats::instance().addToTotal(key,ms());                \
+        
+    #define RETURN_TIME_MEASURE(type,X,key,t_block_size)    \
+    start = measure_point();                                \
+    type val = X                                            \
+    end = measure_point();                                  \
+    Stats::instance().addToTotal(key,ms());                 \
+    if(t_block_size > 0)                                    \
+        std::cout << "RESULT" << Stats::instance().toStringAndClear() << std::endl; \
+    return val;                                             \
+    
+#endif  
+
+#ifndef MEASURE_TIMINGS
+    #define TIME_MEASURE(X,key) X
+    #define RETURN_TIME_MEASURE(type,X,key,t_block_size) return X
+#endif
+
+
 //! Namespace for the succinct data structure library.
 namespace sdsl
 {
 
-template<uint32_t t_super_block_size=512,uint32_t t_block_size=128, bool t_min = true,
-         class t_rank = rank_support_v5<> >
+template<uint32_t t_super_block_size=512,uint32_t t_block_size=128, bool t_min = true>
 class rmq_succinct_rec;
 
-template<uint32_t t_super_block_size=512, uint32_t t_block_size=128, class t_rank = rank_support_v5<> >
+template<uint32_t t_super_block_size=512, uint32_t t_block_size=128>
 struct range_maximum_bp_fast_rec {
     typedef rmq_succinct_rec<t_super_block_size, t_block_size, false> type;
 };
@@ -62,7 +149,7 @@ struct range_maximum_bp_fast_rec {
  * In Proceedings of Data Compression Conference, DCC'16.
  * 
  */
-template<uint32_t t_super_block_size, uint32_t t_block_size, bool t_min, class t_rank>
+template<uint32_t t_super_block_size, uint32_t t_block_size, bool t_min>
 class rmq_succinct_rec
 {
         bit_vector                  m_gct_bp;         //!< A bit vector which contains the BP-GT of the input container.
@@ -202,7 +289,7 @@ private:
         }
         
         ~rmq_succinct_rec() {
-            if (t_block_size > 0 && m_rmq_recursive) {
+            if (t_block_size > 0 && m_gct_bp.size() > 2) {
                 delete m_rmq_recursive;
             }
         }
@@ -284,108 +371,65 @@ private:
          */
         size_type operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
-            size_type i     = m_rank_select.select(l+2)-1;
-            size_type j     = m_rank_select.select(r+2);
+            #ifdef MEASURE_TIMINGS
+            if(t_block_size > 0) Stats::instance().addToTotal("Range",(r-l+1));
+            #endif
+            TIME_MEASURE(size_type i = m_rank_select.select(l+2)-1;, "Select")
+            TIME_MEASURE(size_type j = m_rank_select.select(r+2);,"Select")
+            
             size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
             size_type sparse_j = j/t_super_block_size;
             bit_vector::difference_type min_rel_ex = 0;
             if(sparse_i >= sparse_j) {
                 sparse_i = sparse_i-(i != 0);
                 size_type rmq_e = i;
-                if(sparse_i == sparse_j) rmq_e = get_min_excess_idx(sparse_i);
+                if(sparse_i == sparse_j) {
+                    TIME_MEASURE(rmq_e = get_min_excess_idx(sparse_i);,"min_excess_idx")
+                }
                 else {
-                    size_type rmq_e1 = get_min_excess_idx(sparse_i);
-                    size_type rmq_e2 = get_min_excess_idx(sparse_j);
-                    rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
+                    TIME_MEASURE(size_type rmq_e1 = get_min_excess_idx(sparse_i);,"min_excess_idx")
+                    TIME_MEASURE(size_type rmq_e2 = get_min_excess_idx(sparse_j);,"min_excess_idx")
+                    TIME_MEASURE(rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);, "min_excess")
                 }
                 if(rmq_e < i || rmq_e > j) {
-                  rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
+                  TIME_MEASURE(rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);,"Scan");
                 }
-                return m_rank_select.rank(rmq_e+1)-1;
+                RETURN_TIME_MEASURE(size_type,m_rank_select.rank(rmq_e+1)-1;,"Rank",t_block_size)
             }
             else {
                 size_type rmq_sparse_idx = 0;
                 if(t_block_size > 0) {
-                    rmq_sparse_idx = (*m_rmq_recursive)(sparse_i,sparse_j-1);
+                    TIME_MEASURE(rmq_sparse_idx = (*m_rmq_recursive)(sparse_i,sparse_j-1);,"Recursive_RMQ")
                 }
                 else {
-                    rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
+                    TIME_MEASURE(rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);,"Sparse_RMQ")
                 }
                 size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
-                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
-                
-                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
-                i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
-                if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
-                    rmq_e1 = near_rmq(m_gct_bp,i,t_super_block_size*sparse_i,min_rel_ex);
-                    rmq_e1_ex = m_rank_select.excess(rmq_e1);
+                TIME_MEASURE(i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];,"min_excess")
+                TIME_MEASURE(size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));,"min_excess_idx")
+                TIME_MEASURE(i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];,"min_excess")
+                if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {                
+                    TIME_MEASURE(rmq_e1 = near_rmq(m_gct_bp,i,t_super_block_size*sparse_i,min_rel_ex);,"Scan")
+                    TIME_MEASURE(rmq_e1_ex = m_rank_select.excess(rmq_e1);,"Rank")
                 }
                 
-                size_type rmq_e2 = get_min_excess_idx(sparse_j);
-                i_value_type rmq_e2_ex = m_min_excess[sparse_j];
+                TIME_MEASURE(size_type rmq_e2 = get_min_excess_idx(sparse_j);,"min_excess_idx");
+                TIME_MEASURE(i_value_type rmq_e2_ex = m_min_excess[sparse_j];,"min_excess")
                 if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
-                    rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex);
-                    rmq_e2_ex = m_rank_select.excess(rmq_e2);
+                    TIME_MEASURE(rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex);,"Scan")
+                    TIME_MEASURE(rmq_e2_ex = m_rank_select.excess(rmq_e2);,"Rank")
                 }
                 auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
                 size_type rmq_e = rmq_min.first;
                 int_vector<>::value_type rmq_e_ex = rmq_min.second;
+                #ifdef MEASURE_TIMINGS
+                if(t_block_size > 0) std::cout << "RESULT" << Stats::instance().toStringAndClear() << std::endl;
+                #endif
                 return ((rmq_e_ex+rmq_e)>>1);      
             }
         }
         
-        /*std::pair<size_type,bool> operator()(const size_type l, const size_type r)const {
-            assert(l <= r); assert(r < size());
-            bool rmq_scan = false;
-            size_type i     = m_rank_select.select(l+2)-1;
-            size_type j     = m_rank_select.select(r+2);
-            size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
-            size_type sparse_j = j/t_super_block_size;
-            bit_vector::difference_type min_rel_ex = 0;
-            if(sparse_i >= sparse_j) {
-                sparse_i = sparse_i-(i != 0);
-                size_type rmq_e = i;
-                if(sparse_i == sparse_j) rmq_e = get_min_excess_idx(sparse_i);
-                else {
-                    size_type rmq_e1 = get_min_excess_idx(sparse_i);
-                    size_type rmq_e2 = get_min_excess_idx(sparse_j);
-                    rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);   
-                }
-                if(rmq_e < i || rmq_e > j) {
-                    rmq_scan = true;
-                    rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);
-                }
-                return std::make_pair(m_rank_select.rank(rmq_e+1)-1,rmq_scan);
-            }
-            else {
-                size_type rmq_sparse_idx = m_rmq_recursive(sparse_i,sparse_j-1).first;
-                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx+1);
-                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx+1];
-                
-                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));
-                i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
-                if(rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
-                    rmq_scan = true;
-                    rmq_e1 = near_rmq(m_gct_bp,i,t_super_block_size*sparse_i,min_rel_ex);
-                    rmq_e1_ex = m_rank_select.excess(rmq_e1);
-                }
-                
-                size_type rmq_e2 = get_min_excess_idx(sparse_j);
-                i_value_type rmq_e2_ex = m_min_excess[sparse_j];
-                if(rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
-                    rmq_scan = true;
-                    rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex);
-                    rmq_e2_ex = m_rank_select.excess(rmq_e2);
-                }
-                
-                auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
-                                      rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
-                size_type rmq_e = rmq_min.first;
-                size_type rmq_e_ex = rmq_min.second;
-                return std::make_pair((rmq_e_ex+rmq_e)/2-1,rmq_scan);      
-            }
-        }*/
 
         size_type size()const {
             return (m_gct_bp.size()-2)/2;
