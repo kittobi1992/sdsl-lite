@@ -33,21 +33,22 @@
 #include "suffix_tree_helper.hpp"
 #include "util.hpp"
 
-//#define MEASURE_TIMINGS
+#define MEASURE_TIMINGS
 
 #ifdef MEASURE_TIMINGS  
 using MeasurePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
 MeasurePoint start, end;
 
-#define MICRO 1000000
+#define NANO 1000000000
 inline MeasurePoint measure_point() {
     return std::chrono::high_resolution_clock::now();
 }
 
-double ms() {
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    return elapsed_seconds.count()*MICRO;
+double ns() {
+    std::chrono::duration<double> elapsed_seconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    return elapsed_seconds.count()*NANO;
 }
+
 
 class Stats {
 private:
@@ -60,11 +61,11 @@ public:
     Stats& operator= (Stats&&) = delete;
     
     void add(const std::string& key, double value) {
-        _stats[key] += value;
+        _stats[key] += std::max((value-_avg_timer_overhead),0.0);
     }
     
     void addToTotal(const std::string& key, double value) {
-        _stats[key] += value;
+        _stats[key] += std::max((value-(key != "Range" ? _avg_timer_overhead : 0.0)),0.0);
     }
     
     
@@ -84,6 +85,16 @@ public:
         }
     }
     
+    void calculate_average_timer_overhead(size_t N) {
+        double tmp_timer_overhead = 0.0;
+        for(size_t i = 0; i < N; ++i) {
+            start = measure_point();
+            end = measure_point();
+            tmp_timer_overhead += ns();
+        }
+        _avg_timer_overhead = tmp_timer_overhead/N;
+    }
+    
     static Stats & instance() {
         static Stats instance;
         return instance;
@@ -92,9 +103,10 @@ public:
     
 private:
     Stats() :
-    _stats() { }
+    _stats(), _avg_timer_overhead(0.0) { reset(); calculate_average_timer_overhead(100000); }
     StatsMap _stats;
-    std::vector<std::string> keys = {"Rank","Recursive_RMQ","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx"};
+    double _avg_timer_overhead;
+    std::vector<std::string> keys = {"Rank","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx"};
 };
 
 
@@ -102,15 +114,15 @@ private:
     start = measure_point();                               \
     X                                                      \
     end = measure_point();                                 \
-    Stats::instance().addToTotal(key,ms());                \
+    Stats::instance().addToTotal(key,ns());                \
         
     #define RETURN_TIME_MEASURE(type,X,key,t_block_size)    \
     start = measure_point();                                \
     type val = X                                            \
     end = measure_point();                                  \
-    Stats::instance().addToTotal(key,ms());                 \
+    Stats::instance().addToTotal(key,ns());                 \
     if(t_block_size > 0)                                    \
-        std::cout << "RESULT" << Stats::instance().toStringAndClear() << std::endl; \
+        std::cout << "TIMING_RESULT" << Stats::instance().toStringAndClear() << std::endl; \
     return val;                                             \
     
 #endif  
@@ -399,7 +411,7 @@ private:
             else {
                 size_type rmq_sparse_idx = 0;
                 if(t_block_size > 0) {
-                    TIME_MEASURE(rmq_sparse_idx = (*m_rmq_recursive)(sparse_i,sparse_j-1);,"Recursive_RMQ")
+                    rmq_sparse_idx = (*m_rmq_recursive)(sparse_i,sparse_j-1);
                 }
                 else {
                     TIME_MEASURE(rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);,"Sparse_RMQ")
@@ -424,7 +436,7 @@ private:
                 size_type rmq_e = rmq_min.first;
                 int_vector<>::value_type rmq_e_ex = rmq_min.second;
                 #ifdef MEASURE_TIMINGS
-                if(t_block_size > 0) std::cout << "RESULT" << Stats::instance().toStringAndClear() << std::endl;
+                if(t_block_size > 0) std::cout << "TIMING_RESULT" << Stats::instance().toStringAndClear() << std::endl;
                 #endif
                 return ((rmq_e_ex+rmq_e)>>1);      
             }
