@@ -78,6 +78,7 @@ void construct_lcp_kasai(cache_config& config)
         if (!load_from_cache(sa, conf::KEY_SA, config)) {
             return;
         }
+
         // use Kasai algorithm to compute the lcp values
         for (size_type i=0,j=0,sa_1=0,l=0, n=isa_buf.size(); i < n; ++i) {
             sa_1 =  isa_buf[i]; // = isa[i]

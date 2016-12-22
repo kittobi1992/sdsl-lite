@@ -33,7 +33,7 @@
 #include "suffix_tree_helper.hpp"
 #include "util.hpp"
 
-#define MEASURE_TIMINGS
+// #define MEASURE_TIMINGS
 
 #ifdef MEASURE_TIMINGS  
 using MeasurePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
@@ -106,7 +106,7 @@ private:
     _stats(), _avg_timer_overhead(0.0) { reset(); calculate_average_timer_overhead(100000); }
     StatsMap _stats;
     double _avg_timer_overhead;
-    std::vector<std::string> keys = {"Rank","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx"};
+    std::vector<std::string> keys = {"Rank","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx","Other"};
 };
 
 
@@ -383,17 +383,18 @@ private:
          */
         size_type operator()(const size_type l, const size_type r)const {
             assert(l <= r); assert(r < size());
+            if(l == r) return l;
             #ifdef MEASURE_TIMINGS
             if(t_block_size > 0) Stats::instance().addToTotal("Range",(r-l+1));
             #endif
             TIME_MEASURE(size_type i = m_rank_select.select(l+2)-1;, "Select")
             TIME_MEASURE(size_type j = m_rank_select.select(r+2);,"Select")
             
-            size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
-            size_type sparse_j = j/t_super_block_size;
+            TIME_MEASURE(size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
+            size_type sparse_j = j/t_super_block_size;,"Other")
             bit_vector::difference_type min_rel_ex = 0;
             if(sparse_i >= sparse_j) {
-                sparse_i = sparse_i-(i != 0);
+                TIME_MEASURE(sparse_i = sparse_i-(i != 0);,"Other")
                 size_type rmq_e = i;
                 if(sparse_i == sparse_j) {
                     TIME_MEASURE(rmq_e = get_min_excess_idx(sparse_i);,"min_excess_idx")
@@ -404,7 +405,8 @@ private:
                     TIME_MEASURE(rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);, "min_excess")
                 }
                 if(rmq_e < i || rmq_e > j) {
-                  TIME_MEASURE(rmq_e = near_rmq(m_gct_bp,i,j,min_rel_ex);,"Scan");
+                  TIME_MEASURE(rmq_e = near_rmq(m_gct_bp,i,j-1,min_rel_ex);,"Scan");
+//                   std::cout << i << " " << rmq_e << " " << j << " " << m_rank_select.rank(i+1)-1 << " " << m_rank_select.rank(rmq_e+1)-1 << " " << m_rank_select.rank(j+1)-2 << std::endl;
                 }
                 RETURN_TIME_MEASURE(size_type,m_rank_select.rank(rmq_e+1)-1;,"Rank",t_block_size)
             }
@@ -416,7 +418,7 @@ private:
                 else {
                     TIME_MEASURE(rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);,"Sparse_RMQ")
                 }
-                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
+                TIME_MEASURE(size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);,"min_excess_idx")
                 TIME_MEASURE(i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];,"min_excess")
                 TIME_MEASURE(size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0));,"min_excess_idx")
                 TIME_MEASURE(i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];,"min_excess")
@@ -431,14 +433,11 @@ private:
                     TIME_MEASURE(rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex);,"Scan")
                     TIME_MEASURE(rmq_e2_ex = m_rank_select.excess(rmq_e2);,"Rank")
                 }
-                auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
+                TIME_MEASURE(auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
                                       rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
                 size_type rmq_e = rmq_min.first;
-                int_vector<>::value_type rmq_e_ex = rmq_min.second;
-                #ifdef MEASURE_TIMINGS
-                if(t_block_size > 0) std::cout << "TIMING_RESULT" << Stats::instance().toStringAndClear() << std::endl;
-                #endif
-                return ((rmq_e_ex+rmq_e)>>1);      
+                int_vector<>::value_type rmq_e_ex = rmq_min.second;,"Other")
+                RETURN_TIME_MEASURE(size_type,((rmq_e_ex+rmq_e)>>1);,"Other",t_block_size)      
             }
         }
         

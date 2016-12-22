@@ -143,14 +143,16 @@ namespace sdsl
         
         inline size_type select(size_type idx, bool use_select_samples=true) const {
             size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
+            
             if(use_select_samples && m_max_excess > t_sample_size) {
-                size_t sample_idx = idx/t_sample_size;
+                size_t sample_idx = (idx-1)/t_sample_size;
                 l = std::max(l,m_select_sample[sample_idx]);
                 r = std::min(r,m_select_sample[sample_idx+1]);
             }
+            
             while(r - l >= 64) {
                 size_type m = (l+r)/2;
-                if(m_bp_rank(m) < idx) l = m+1;
+                if(m_bp_rank.rank(m) < idx) l = m+1;
                 else r = m;
             }
             
@@ -163,7 +165,6 @@ namespace sdsl
                 if(s_rank + bits::cnt(data & bits::lo_set[m]) < idx) l = m+1;
                 else r = m;
             }
-            
             return s_pos + l - 1;
         }
         
