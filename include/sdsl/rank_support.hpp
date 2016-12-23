@@ -30,7 +30,7 @@
 //! Namespace for the succinct data structure library.
 namespace sdsl
 {
-
+ 
 //! The base class of classes supporting rank_queries for a sdsl::bit_vector in constant time.
 /*!
 */

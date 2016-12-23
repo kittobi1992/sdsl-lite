@@ -26,7 +26,8 @@ typedef Types<sdsl::rmq_succinct_sct<>,
         sdsl::rmq_succinct_bp<>,
         sdsl::rmq_succinct_bp_fast<>,
         sdsl::rmq_succinct_rec<>,
-        sdsl::rmq_succinct_rec<1024> > Implementations;
+        sdsl::rmq_succinct_rec<1024>,
+        sdsl::rmq_succinct_rec_old<1024>> Implementations;
 
 TYPED_TEST_CASE(rmq_test, Implementations);
 
@@ -108,6 +109,7 @@ TYPED_TEST(rmq_test, rmq_load_and_move_and_query)
             state st = s.top(); s.pop();
             if (st.l < st.idx) {
                 idx = rmq(st.l, st.idx-1);
+//                 std::cout << v[idx-1] << " " << v[idx] << " " << v[idx + 1] << endl;
                 ASSERT_TRUE(idx >= st.l); ASSERT_TRUE(idx <= st.idx-1);
                 ASSERT_TRUE(v[idx] >= v[st.idx])
                         << "v["<<idx<<"]="<< v[idx]
@@ -118,6 +120,7 @@ TYPED_TEST(rmq_test, rmq_load_and_move_and_query)
             }
             if (st.idx < st.r) {
                 idx = rmq(st.idx+1, st.r);
+//                 std::cout << idx << " < " << st.idx+1 << " " << st.r << std::endl;
                 ASSERT_TRUE(idx >= st.idx+1); ASSERT_TRUE(idx <= st.r);
                 ASSERT_TRUE(v[idx] >= v[st.idx])
                         << "v["<<idx<<"]="<< v[idx]

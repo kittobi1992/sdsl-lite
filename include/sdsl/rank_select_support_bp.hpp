@@ -85,6 +85,7 @@ namespace sdsl
     public:
         typedef typename bit_vector::size_type size_type;
         typedef typename bit_vector::value_type value_type;
+        typedef rank_support_trait<1,1>  trait_type;
         
         //! Constructor
         /*
@@ -95,6 +96,7 @@ namespace sdsl
                 set_vector(v);
                 m_bp_rank = rank_support_v5<>(v);
                 calculate_maximum_excess_value();
+//                 std::cout << m_max_excess << std::endl;
                 if(m_max_excess > t_sample_size) {
                     generate_select_sample();
                 }
@@ -140,6 +142,32 @@ namespace sdsl
         inline size_type rank(size_type idx) const {
             return m_bp_rank.rank(idx);
         }
+        
+        /*inline size_type select(size_type idx, bool use_select_samples=true) const {
+            std::cout << "Result: select("<<idx<<") = " << select2(idx) << std::endl;
+            size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
+            
+            std::cout << "Start [l,r] = [" << l << "," << r << "]" << std::endl;
+            
+            if(use_select_samples && m_max_excess > t_sample_size) {
+                size_t sample_idx = (idx-1)/t_sample_size;
+                l = std::max(l,m_select_sample[sample_idx]);
+                r = std::min(r,m_select_sample[sample_idx+1]);
+            }
+            std::cout << "Sample adaption [l,r] = [" << l << "," << r << "]" << std::endl;
+            const uint64_t* p = m_bp_rank.m_basic_block.data()
+                                + ((l>>10)&0xFFFFFFFFFFFFFFFEULL);// (idx/2048)*2
+            //                     ( prefix sum of the 6x64bit blocks | (idx%2048)/(64*6) )
+            size_type result = *p
+                                + ((*(p+1)>>(60-12*((l&0x7FF)/(64*6))))&0x7FFULL)
+                                + trait_type::word_rank(m_v->data(), l);
+                                
+            std::cout << result << " " << m_bp_rank(l) << std::endl;
+            
+            std::cout << "----------------------------------------" << std::endl;
+            
+            return 0;
+        }*/
         
         inline size_type select(size_type idx, bool use_select_samples=true) const {
             size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
