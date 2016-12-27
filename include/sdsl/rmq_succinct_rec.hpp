@@ -472,7 +472,7 @@ if(t_block_size > 0)                                    \
                 if(t_block_size > 0) Stats::instance().addToTotal("Range",(r-l+1));
                 #endif
                 TIME_MEASURE(size_type i = m_rank_select.select(tmp_l+2)-1;, "Select")
-                TIME_MEASURE(size_type j = m_rank_select.select(tmp_r+2);,"Select")
+                TIME_MEASURE(size_type j = m_rank_select.select(tmp_r+2,i);,"Select")
                 
                 TIME_MEASURE(size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
                 size_type sparse_j = j/t_super_block_size;,"Other")

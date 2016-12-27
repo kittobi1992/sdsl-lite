@@ -75,9 +75,9 @@ namespace sdsl
             size_t N = m_v->size()/2;
             m_select_sample = int_vector<>(N/t_sample_size+2,0);
             for(size_t i = 1; i < N; i += t_sample_size) {
-                m_select_sample[i/t_sample_size] = select(i,false);
+                m_select_sample[i/t_sample_size] = select(i,0,false);
             }
-            m_select_sample[N/t_sample_size+1] = select(N,false);
+            m_select_sample[N/t_sample_size+1] = select(N,0,false);
             util::bit_compress(m_select_sample);
         }
                                                                                  
@@ -96,7 +96,7 @@ namespace sdsl
                 set_vector(v);
                 m_bp_rank = rank_support_v5<>(v);
                 calculate_maximum_excess_value();
-//                 std::cout << m_max_excess << std::endl;
+//                  std::cout << m_max_excess << std::endl;
                 if(m_max_excess > t_sample_size) {
                     generate_select_sample();
                 }
@@ -143,57 +143,86 @@ namespace sdsl
             return m_bp_rank.rank(idx);
         }
         
-        /*inline size_type select(size_type idx, bool use_select_samples=true) const {
-            std::cout << "Result: select("<<idx<<") = " << select2(idx) << std::endl;
-            size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
+        inline size_type select(size_type idx, size_type left = 0, bool use_select_samples=true) const {
             
-            std::cout << "Start [l,r] = [" << l << "," << r << "]" << std::endl;
+            //Initial restriction interval [l,r] for select_1(idx)
+            size_type l = std::max(left, 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))));
+            size_type r = 2*(idx-1); 
             
-            if(use_select_samples && m_max_excess > t_sample_size) {
-                size_t sample_idx = (idx-1)/t_sample_size;
-                l = std::max(l,m_select_sample[sample_idx]);
-                r = std::min(r,m_select_sample[sample_idx+1]);
-            }
-            std::cout << "Sample adaption [l,r] = [" << l << "," << r << "]" << std::endl;
-            const uint64_t* p = m_bp_rank.m_basic_block.data()
-                                + ((l>>10)&0xFFFFFFFFFFFFFFFEULL);// (idx/2048)*2
-            //                     ( prefix sum of the 6x64bit blocks | (idx%2048)/(64*6) )
-            size_type result = *p
-                                + ((*(p+1)>>(60-12*((l&0x7FF)/(64*6))))&0x7FFULL)
-                                + trait_type::word_rank(m_v->data(), l);
-                                
-            std::cout << result << " " << m_bp_rank(l) << std::endl;
             
-            std::cout << "----------------------------------------" << std::endl;
-            
-            return 0;
-        }*/
-        
-        inline size_type select(size_type idx, bool use_select_samples=true) const {
-            size_type l = 2*(idx-1)-std::min(static_cast<size_type>(m_max_excess),static_cast<size_type>(2*(idx-1))); size_type r = 2*(idx-1); 
-            
+            //If the Depth of the BP-Sequence is greater than t_sample_size, we use select use_select_samples
+            //to further restrict the interval and to guarantee O(log(log(n))) running time
             if(use_select_samples && m_max_excess > t_sample_size) {
                 size_t sample_idx = (idx-1)/t_sample_size;
                 l = std::max(l,m_select_sample[sample_idx]);
                 r = std::min(r,m_select_sample[sample_idx+1]);
             }
             
-            while(r - l >= 64) {
-                size_type m = (l+r)/2;
-                if(m_bp_rank.rank(m) < idx) l = m+1;
-                else r = m;
+            size_type select_pos = 0, cur_rank = 0;
+            
+            if(r-l >= 128) {
+                size_type bp_size = m_v->size();
+                size_type N = m_bp_rank.m_basic_block.size();
+                size_type start_pos = ((l>>10)&0xFFFFFFFFFFFFFFFEULL);
+                select_pos = (start_pos>>1)<<11;
+                
+                //Prefix Sum of the 2048 bit superblock which contains select_1(idx)
+                const uint64_t* p = m_bp_rank.m_basic_block.data() + start_pos;// (idx/2048)*2
+                while(start_pos + 2 < N && *(p + 2) < idx) { p += 2; start_pos += 2; select_pos += 2048; }
+                cur_rank = *p;
+                
+                //Calculate the prefix sum of the 348 bit basic block, which contains select_1(idx)
+                //First  Block from bit 48 to bit 59
+                //Second Block from bit 36 to bit 47
+                //Third  Block from bit 24 to bit 35
+                //Fourth Block from bit 12 to bit 23
+                //Fifth  Block from bit  0 to bit 11
+                const uint64_t basic_block_sum = *(p+1);
+                size_type i = 1;
+                for(; i < 6; ++i) {
+                    size_type tmp_cur_rank = cur_rank + ((basic_block_sum>>(60-12*i))&0x7FFULL);
+                    if(tmp_cur_rank >= idx || select_pos + ((i*6)<<6) >= bp_size) {
+                        break;
+                    }
+                }
+                select_pos += ((i-1)*6)<<6;
+                cur_rank += (basic_block_sum>>(60-12*(i-1)))&0x7FFULL;
+                
+                //Calculate the prefix sum of the 64 bits block, which contains select_1(idx)
+                const uint64_t* data = m_v->data()+(select_pos>>6);
+                for(i = 0; i < 6; ++i) {
+                    cur_rank += trait_type::full_word_rank(data,(i<<6)); 
+                    if(cur_rank >= idx) {
+                        break;
+                    }
+                }
+                select_pos += i*64;
+                cur_rank -=  trait_type::full_word_rank(data,(i<<6));
+            } else if(r-l >= 64) {
+                while(r - l >= 64) {
+                    size_type m = (l+r)/2;
+                    if(m_bp_rank.rank(m) < idx) l = m+1;
+                    else r = m;
+                }
+                select_pos = l;
+                cur_rank = m_bp_rank(select_pos);
+            }
+            else {
+                select_pos = l;
+                cur_rank = m_bp_rank(select_pos);
             }
             
-            size_type s_pos = l;
-            size_type s_rank = m_bp_rank(s_pos);
-            value_type data = m_v->get_int(s_pos,r-l);
-            r = r - l + 1; l = 0;
+            //Calculate the exact position of select_1(idx) with binary search in a 64-bit word
+            l = 0; r = 64;
+            value_type data = m_v->get_int(select_pos,r-l);
             while(l < r) {
                 size_type m = (l+r)/2;
-                if(s_rank + bits::cnt(data & bits::lo_set[m]) < idx) l = m+1;
+                if(cur_rank + bits::cnt(data & bits::lo_set[m]) < idx) l = m+1;
                 else r = m;
             }
-            return s_pos + l - 1;
+            select_pos += (l - 1);
+            
+            return select_pos;
         }
         
         
