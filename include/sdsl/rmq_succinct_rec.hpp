@@ -177,7 +177,6 @@ class rmq_succinct_rec
         bit_vector::value_type      m_max_excess_v;
         bit_vector::value_type      m_max_excess_reverse_v;
 
-
         void copy(const rmq_succinct_rec& rm) {
             m_gct_bp = rm.m_gct_bp;
             m_rank_select = rm.m_rank_select;
@@ -342,6 +341,9 @@ class rmq_succinct_rec
         const rank_select_support_bp<>       rank_select    = m_rank_select;
         //const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
 
+        size_t num_avoided_selects;
+        size_t num_queries;
+
         //! Default constructor
         rmq_succinct_rec() {}
 
@@ -351,6 +353,8 @@ class rmq_succinct_rec
          */
         template<class t_rac>
         rmq_succinct_rec(const t_rac* v=nullptr) {
+            num_avoided_selects = 0;
+            num_queries = 0;
             if (v != nullptr) {
                 //TODO: Use construct_supercartesian_tree_bp_succinct in suffix_tree_helper.hpp
                 m_gct_bp = bit_vector(2*v->size()+2,0);
@@ -456,7 +460,7 @@ class rmq_succinct_rec
          * \par Time complexity
          *      \f$ \Order{1} \f$
          */
-        size_type operator()(const size_type l, const size_type r)const {
+        size_type operator()(const size_type l, const size_type r) {
             assert(l <= r); assert(r < size());
             if (l == r) return l;
             size_t N = size();
@@ -467,6 +471,7 @@ class rmq_succinct_rec
 #ifdef MEASURE_TIMINGS
             if (t_block_size > 0) Stats::instance().addToTotal("Range",(r-l+1));
 #endif
+            num_queries++;
             TIME_MEASURE(size_type i = m_rank_select.select(tmp_l+2)-1; , "Select")
 
             if (tmp_r - tmp_l < 64) {
@@ -488,6 +493,7 @@ class rmq_succinct_rec
                         }
                     }
 
+                    num_avoided_selects++;
                     if (t_block_size == 0 || m_max_excess_v < m_max_excess_reverse_v) {
                         return (min_excess+min_idx)>>1;
                     } else {

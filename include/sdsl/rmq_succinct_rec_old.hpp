@@ -282,6 +282,11 @@ class rmq_succinct_rec_old
         const rank_select_support_bp<>       rank_select    = m_rank_select;
         //const int_vector<>&                min_excess_idx64 = m_min_excess_idx64;
 
+
+        size_t num_avoided_selects;
+        size_t num_queries;
+
+
         //! Default constructor
         rmq_succinct_rec_old() {}
 
@@ -291,6 +296,8 @@ class rmq_succinct_rec_old
          */
         template<class t_rac>
         rmq_succinct_rec_old(const t_rac* v=nullptr) {
+            num_queries = 0;
+            num_avoided_selects = 0;
             if (v != nullptr) {
                 //TODO: Use construct_supercartesian_tree_bp_succinct in suffix_tree_helper.hpp
                 m_gct_bp = bit_vector(2*v->size()+2,0);
@@ -378,7 +385,7 @@ class rmq_succinct_rec_old
          * \par Time complexity
          *      \f$ \Order{1} \f$
          */
-        size_type operator()(const size_type l, const size_type r)const {
+        size_type operator()(const size_type l, const size_type r) {
             assert(l <= r); assert(r < size());
             if (l == r) return l;
 #ifdef MEASURE_TIMINGS
@@ -386,6 +393,7 @@ class rmq_succinct_rec_old
 #endif
             TIME_MEASURE(size_type i = m_rank_select.select(l+2)-1; , "Select")
 
+            num_queries++;
             if (r - l < 64) {
                 value_type data = m_gct_bp.get_int(i+1);
                 uint64_t one_cnt = bits::cnt(data)-1;
@@ -404,7 +412,7 @@ class rmq_succinct_rec_old
                             }
                         }
                     }
-
+                    num_avoided_selects++;
                     return (min_excess+min_idx)>>1;
                 }
             }
