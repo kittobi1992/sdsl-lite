@@ -14,12 +14,12 @@
  *    You should have received a copy of the GNU General Public License
  *    along with this program.  If not, see http://www.gnu.org/licenses/ .
  */
-/*! \file rmq_succinct_rec.hpp
- *    \brief rmq_succinct_rec.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
+/*! \file rmq_succinct_rec_new.hpp
+ *    \brief rmq_succinct_rec_new.hpp contains the class rmq_succinct_bp_fast which supports range minimum or range maximum queries on a random access container in constant time and \f$2 n+o(n) bits\f$ space.
  *    \author Tobias Heuer
  */
-#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_REC
-#define INCLUDED_SDSL_RMQ_SUCCINCT_REC
+#ifndef INCLUDED_SDSL_RMQ_SUCCINCT_REC_NEW
+#define INCLUDED_SDSL_RMQ_SUCCINCT_REC_NEW
 
 #include <stack>
 #include <limits>
@@ -33,119 +33,17 @@
 #include "suffix_tree_helper.hpp"
 #include "util.hpp"
 
-// #define MEASURE_TIMINGS
-
-#ifdef MEASURE_TIMINGS
-using MeasurePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
-MeasurePoint start, end;
-
-#define NANO 1000000000
-inline MeasurePoint measure_point()
-{
-    return std::chrono::high_resolution_clock::now();
-}
-
-double ns()
-{
-    std::chrono::duration<double> elapsed_seconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    return elapsed_seconds.count()*NANO;
-}
-
-
-class Stats
-{
-    private:
-        using StatsMap = std::map<std::string, double>;
-
-    public:
-        Stats(const Stats&) = delete;
-        Stats(Stats&&) = delete;
-        Stats& operator= (const Stats&) = delete;
-        Stats& operator= (Stats&&) = delete;
-
-        void add(const std::string& key, double value) {
-            _stats[key] += std::max((value-_avg_timer_overhead),0.0);
-        }
-
-        void addToTotal(const std::string& key, double value) {
-            _stats[key] += std::max((value-(key != "Range" ? _avg_timer_overhead : 0.0)),0.0);
-        }
-
-
-        std::string toStringAndClear() {
-            std::ostringstream s;
-            for (auto& stat : _stats) {
-                s << " " << stat.first << "=" << stat.second;
-            }
-            reset();
-            return s.str();
-        }
-
-        void reset() {
-            _stats.clear();
-            for (std::string& key : keys) {
-                addToTotal(key,0.0);
-            }
-        }
-
-        void calculate_average_timer_overhead(size_t N) {
-            double tmp_timer_overhead = 0.0;
-            for (size_t i = 0; i < N; ++i) {
-                start = measure_point();
-                end = measure_point();
-                tmp_timer_overhead += ns();
-            }
-            _avg_timer_overhead = tmp_timer_overhead/N;
-        }
-
-        static Stats& instance() {
-            static Stats instance;
-            return instance;
-        }
-
-
-    private:
-        Stats() :
-            _stats(), _avg_timer_overhead(0.0) { reset(); calculate_average_timer_overhead(100000); }
-        StatsMap _stats;
-        double _avg_timer_overhead;
-        std::vector<std::string> keys = {"Rank","Sparse_RMQ","Scan","Select","min_excess","min_excess_idx","Other"};
-};
-
-
-#define TIME_MEASURE(X,key)                                \
-start = measure_point();                               \
-X                                                      \
-end = measure_point();                                 \
-Stats::instance().addToTotal(key,ns());                \
- 
-#define RETURN_TIME_MEASURE(type,X,key,t_block_size)    \
-start = measure_point();                                \
-type val = X                                            \
-end = measure_point();                                  \
-Stats::instance().addToTotal(key,ns());                 \
-if(t_block_size > 0)                                    \
-    std::cout << "TIMING_RESULT" << Stats::instance().toStringAndClear() << std::endl; \
-    return val;                                             \
- 
-#endif
-
-#ifndef MEASURE_TIMINGS
-#define TIME_MEASURE(X,key) X
-#define RETURN_TIME_MEASURE(type,X,key,t_block_size) return X
-#endif
-
 
 //! Namespace for the succinct data structure library.
 namespace sdsl
 {
 
-template<uint32_t t_super_block_size=512,uint32_t t_block_size=128, bool t_min = true>
-class rmq_succinct_rec;
+template<uint32_t t_super_block_size=1024,uint32_t t_block_size=128, bool t_min = true>
+class rmq_succinct_rec_new;
 
-template<uint32_t t_super_block_size=512, uint32_t t_block_size=128>
-struct range_maximum_bp_fast_rec {
-    typedef rmq_succinct_rec<t_super_block_size, t_block_size, false> type;
+template<uint32_t t_super_block_size=1024, uint32_t t_block_size=128>
+struct range_maximum_bp_fast_rec_new {
+    typedef rmq_succinct_rec_new<t_super_block_size, t_block_size, false> type;
 };
 
 //! A class to support range minimum or range maximum queries on a random access container.
@@ -165,19 +63,19 @@ struct range_maximum_bp_fast_rec {
  *
  */
 template<uint32_t t_super_block_size, uint32_t t_block_size, bool t_min>
-class rmq_succinct_rec
+class rmq_succinct_rec_new
 {
 
         bit_vector                  m_gct_bp;         //!< A bit vector which contains the BP-GT of the input container.
         int_vector<>                m_min_excess_idx;
         int_vector<>                m_min_excess;
         rmq_support_sparse_table<>  m_sparse_rmq;
-        rmq_succinct_rec<t_block_size,0>*  m_rmq_recursive;
+        rmq_succinct_rec_new<t_block_size,0>*  m_rmq_recursive;
         rank_select_support_bp<>      m_rank_select;
         bit_vector::value_type      m_max_excess_v;
         bit_vector::value_type      m_max_excess_reverse_v;
 
-        void copy(const rmq_succinct_rec& rm) {
+        void copy(const rmq_succinct_rec_new& rm) {
             m_gct_bp = rm.m_gct_bp;
             m_rank_select = rm.m_rank_select;
             m_rank_select.set_vector(&m_gct_bp);
@@ -196,22 +94,22 @@ class rmq_succinct_rec
 
     private:
         template<class t_rac>
-        rmq_succinct_rec() { }
+        rmq_succinct_rec_new() { }
 
-        template<class t_rac>
-        bit_vector::value_type construct_generalized_cartesian_tree_leftmost(const t_rac* v, bool write_bp_sequence=true) {
+        template<bool t_strict, bool t_reverse, class t_rac>
+        bit_vector::value_type construct_generalized_cartesian_tree(const t_rac* v, bool write_bp_sequence=true) {
+            typedef min_max_trait<t_rac, true, t_strict> mm_trait;
             bit_vector::value_type max_excess = 0, cur_excess = 0;
             if (v->size() > 0) {
-                size_t cur_pos = 0;
+                long long cur_pos = t_reverse ? v->size()-1 : 0;
                 size_t bp_cur_pos = 0;
-                //TODO: Use sorted_multi_stack_support
-                // Use positions instead of values in succinct_stack
                 std::stack<typename t_rac::value_type> s;
                 s.push(std::numeric_limits<typename t_rac::value_type>::min());
                 if (write_bp_sequence) m_gct_bp[bp_cur_pos++] = 1;
-                while (cur_pos <  v->size()) {
-                    typename t_rac::value_type cur_elem = (*v)[cur_pos++];
-                    while (s.top() > cur_elem && s.size() > 1) {
+                while ((!t_reverse && cur_pos <  ((long long) v->size())) || (t_reverse && cur_pos >= 0)) {
+                    typename t_rac::value_type cur_elem = (*v)[cur_pos];
+                    cur_pos += t_reverse ? -1 : 1;
+                    while (mm_trait::compare(cur_elem, s.top()) && s.size() > 1) {
                         s.pop();
                         bp_cur_pos++; cur_excess--;
                     }
@@ -227,63 +125,6 @@ class rmq_succinct_rec
             }
             return max_excess;
         }
-
-        template<class t_rac>
-        bit_vector::value_type construct_generalized_cartesian_tree_leftmost_reverse(const t_rac* v, bool write_bp_sequence=true) {
-            bit_vector::value_type max_excess = 0, cur_excess = 0;
-            if (v->size() > 0) {
-                long long cur_pos = v->size()-1;
-                size_t bp_cur_pos = 0;
-                //TODO: Use sorted_multi_stack_support
-                // Use positions instead of values in succinct_stack
-                std::stack<typename t_rac::value_type> s;
-                s.push(std::numeric_limits<typename t_rac::value_type>::min());
-                if (write_bp_sequence) m_gct_bp[bp_cur_pos++] = 1;
-                while (cur_pos >= 0) {
-                    typename t_rac::value_type cur_elem = (*v)[cur_pos--];
-                    while (s.top() >= cur_elem && s.size() > 1) {
-                        s.pop();
-                        bp_cur_pos++; cur_excess--;
-                    }
-                    if (write_bp_sequence) m_gct_bp[bp_cur_pos++] = 1;
-                    cur_excess++;
-                    if (cur_excess > max_excess) max_excess = cur_excess;
-                    s.push(cur_elem);
-                }
-                while (!s.empty()) {
-                    s.pop();
-                    bp_cur_pos++;
-                }
-            }
-            return max_excess;
-        }
-
-        template<class t_rac>
-        void construct_generalized_cartesian_tree_leftmost_recursive(const t_rac* v) {
-            if (v->size() > 0) {
-                size_t cur_pos = 0;
-                size_t bp_cur_pos = 0;
-                //TODO: Use sorted_multi_stack_support
-                // Use positions instead of values in succinct_stack
-                std::stack<typename t_rac::value_type> s;
-                s.push(std::numeric_limits<typename t_rac::value_type>::min());
-                m_gct_bp[bp_cur_pos++] = 1;
-                while (cur_pos < v->size()) {
-                    typename t_rac::value_type cur_elem = (*v)[cur_pos++];
-                    while (s.top() >= cur_elem && s.size() > 1) {
-                        s.pop();
-                        bp_cur_pos++;
-                    }
-                    m_gct_bp[bp_cur_pos++] = 1;
-                    s.push(cur_elem);
-                }
-                while (!s.empty()) {
-                    s.pop();
-                    bp_cur_pos++;
-                }
-            }
-        }
-
 
         void construct_minimum_excess_rmq() {
             size_type bp_size = m_gct_bp.size();
@@ -296,7 +137,7 @@ class rmq_succinct_rec
                 m_min_excess[i] = m_rank_select.excess(min_idx);
             }
             if (t_block_size > 0) {
-                m_rmq_recursive = new rmq_succinct_rec<t_block_size,0>(&m_min_excess);
+                m_rmq_recursive = new rmq_succinct_rec_new<t_block_size,0>(&m_min_excess);
             } else {
                 m_sparse_rmq = rmq_support_sparse_table<>(&m_min_excess);
             }
@@ -334,7 +175,7 @@ class rmq_succinct_rec
         typedef typename int_vector<>::value_type i_value_type;
 
         const bit_vector&                  gct_bp         = m_gct_bp;
-        rmq_succinct_rec<t_block_size,0>* rmq_recursive = m_rmq_recursive;
+        rmq_succinct_rec_new<t_block_size,0>* rmq_recursive = m_rmq_recursive;
         const rmq_support_sparse_table<>&  sparse_rmq     = m_sparse_rmq;
         const int_vector<>&                min_excess     = m_min_excess;
         const int_vector<>&                min_excess_idx = m_min_excess_idx;
@@ -345,14 +186,14 @@ class rmq_succinct_rec
         size_t num_queries;
 
         //! Default constructor
-        rmq_succinct_rec() {}
+        rmq_succinct_rec_new() {}
 
         //! Constructor
         /*! \tparam t_rac A random access container.
          *  \param  v     Pointer to container object.
          */
         template<class t_rac>
-        rmq_succinct_rec(const t_rac* v=nullptr) {
+        rmq_succinct_rec_new(const t_rac* v=nullptr) {
             num_avoided_selects = 0;
             num_queries = 0;
             if (v != nullptr) {
@@ -360,14 +201,14 @@ class rmq_succinct_rec
                 m_gct_bp = bit_vector(2*v->size()+2,0);
                 if (t_block_size == 0) {
                     m_max_excess_v = 1; m_max_excess_reverse_v = 0;
-                    construct_generalized_cartesian_tree_leftmost_recursive(v);
+                    construct_generalized_cartesian_tree<false,false>(v);
                 } else {
-                    m_max_excess_v = construct_generalized_cartesian_tree_leftmost(v,false);
-                    m_max_excess_reverse_v = construct_generalized_cartesian_tree_leftmost_reverse(v,false);
+                    m_max_excess_v = construct_generalized_cartesian_tree<true,false>(v,false);
+                    m_max_excess_reverse_v = construct_generalized_cartesian_tree<false,true>(v,false);
                     if (m_max_excess_v < m_max_excess_reverse_v) {
-                        construct_generalized_cartesian_tree_leftmost(v);
+                        construct_generalized_cartesian_tree<true,false>(v);
                     } else {
-                        construct_generalized_cartesian_tree_leftmost_reverse(v);
+                        construct_generalized_cartesian_tree<false,true>(v);
                     }
                 }
 //                     std::cout << m_max_excess_v << " " << m_max_excess_reverse_v << std::endl;
@@ -376,25 +217,25 @@ class rmq_succinct_rec
             }
         }
 
-        ~rmq_succinct_rec() {
+        ~rmq_succinct_rec_new() {
             if (t_block_size > 0 && m_gct_bp.size() > 2) {
                 delete m_rmq_recursive;
             }
         }
 
         //! Copy constructor
-        rmq_succinct_rec(const rmq_succinct_rec& rm) {
+        rmq_succinct_rec_new(const rmq_succinct_rec_new& rm) {
             *this = rm;
         }
 
         //! Move constructor
-        rmq_succinct_rec(rmq_succinct_rec&& rm) {
+        rmq_succinct_rec_new(rmq_succinct_rec_new&& rm) {
             *this = std::move(rm);
         }
 
-        rmq_succinct_rec& operator=(const rmq_succinct_rec& rm) {
+        rmq_succinct_rec_new& operator=(const rmq_succinct_rec_new& rm) {
             if (this != &rm) {
-                m_gct_bp = rm.m_gct_bp;
+                m_gct_bp = rm.m_gct_bp; 
                 m_rank_select = rm.m_rank_select;
                 m_rank_select.set_vector(&m_gct_bp);
                 m_min_excess = rm.m_min_excess;
@@ -411,7 +252,7 @@ class rmq_succinct_rec
             return *this;
         }
 
-        rmq_succinct_rec& operator=(rmq_succinct_rec&& rm) {
+        rmq_succinct_rec_new& operator=(rmq_succinct_rec_new&& rm) {
             if (this != &rm) {
                 m_gct_bp = std::move(rm.m_gct_bp);
                 m_rank_select = std::move(rm.m_rank_select);
@@ -430,7 +271,7 @@ class rmq_succinct_rec
             return *this;
         }
 
-        void swap(rmq_succinct_rec& rm) {
+        void swap(rmq_succinct_rec_new& rm) {
             m_gct_bp.swap(rm.m_gct_bp);
             util::swap_support(m_rank_select, rm.m_rank_select,
                                &m_gct_bp, &(rm.m_gct_bp));
@@ -468,11 +309,9 @@ class rmq_succinct_rec
             if (t_block_size > 0 &&  m_max_excess_v >= m_max_excess_reverse_v) {
                 tmp_l = N-r-1; tmp_r = N-l-1;
             }
-#ifdef MEASURE_TIMINGS
-            if (t_block_size > 0) Stats::instance().addToTotal("Range",(r-l+1));
-#endif
+
             num_queries++;
-            TIME_MEASURE(size_type i = m_rank_select.select(tmp_l+2)-1; , "Select")
+            size_type i = m_rank_select.select(tmp_l+2)-1;
 
             if (tmp_r - tmp_l < 64) {
                 value_type data = m_gct_bp.get_int(i+1);
@@ -502,59 +341,58 @@ class rmq_succinct_rec
                 }
             }
 
-            TIME_MEASURE(size_type j = m_rank_select.select(tmp_r+2,i); ,"Select")
-            TIME_MEASURE(size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
-                         size_type sparse_j = j/t_super_block_size; ,"Other")
+            size_type j = m_rank_select.select(tmp_r+2,i);
+            size_type sparse_i = (i+t_super_block_size-1)/t_super_block_size;
+                         size_type sparse_j = j/t_super_block_size;
             bit_vector::difference_type min_rel_ex = 0;
             if (sparse_i >= sparse_j) {
-                TIME_MEASURE(sparse_i = sparse_i-(i != 0); ,"Other")
+                sparse_i = sparse_i-(i != 0);
                 size_type rmq_e = i;
                 if (sparse_i == sparse_j) {
-                    TIME_MEASURE(rmq_e = get_min_excess_idx(sparse_i); ,"min_excess_idx")
+                    rmq_e = get_min_excess_idx(sparse_i);
                 } else {
-                    TIME_MEASURE(size_type rmq_e1 = get_min_excess_idx(sparse_i); ,"min_excess_idx")
-                    TIME_MEASURE(size_type rmq_e2 = get_min_excess_idx(sparse_j); ,"min_excess_idx")
-                    TIME_MEASURE(rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2); , "min_excess")
+                    size_type rmq_e1 = get_min_excess_idx(sparse_i);
+                    size_type rmq_e2 = get_min_excess_idx(sparse_j);
+                    rmq_e = (m_min_excess[sparse_i] < m_min_excess[sparse_j] ? rmq_e1 : rmq_e2);
                 }
                 if (rmq_e < i || rmq_e > j) {
-                    TIME_MEASURE(rmq_e = near_rmq(m_gct_bp,i,j-1,min_rel_ex); ,"Scan");
-                    //                   std::cout << i << " " << rmq_e << " " << j << " " << m_rank_select.rank(i+1)-1 << " " << m_rank_select.rank(rmq_e+1)-1 << " " << m_rank_select.rank(j+1)-2 << std::endl;
+                    rmq_e = near_rmq(m_gct_bp,i,j-1,min_rel_ex); 
                 }
                 if (t_block_size == 0 || m_max_excess_v < m_max_excess_reverse_v) {
-                    RETURN_TIME_MEASURE(size_type,m_rank_select.rank(rmq_e+1)-1; ,"Rank",t_block_size)
+                    return m_rank_select.rank(rmq_e+1)-1;
                 } else {
-                    RETURN_TIME_MEASURE(size_type,N-m_rank_select.rank(rmq_e+1); ,"Rank",t_block_size)
+                    return N-m_rank_select.rank(rmq_e+1); 
                 }
             } else {
                 size_type rmq_sparse_idx = 0;
                 if (t_block_size > 0) {
                     rmq_sparse_idx = (*m_rmq_recursive)(sparse_i,sparse_j-1);
                 } else {
-                    TIME_MEASURE(rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1); ,"Sparse_RMQ")
+                    rmq_sparse_idx = m_sparse_rmq(sparse_i,sparse_j-1);
                 }
-                TIME_MEASURE(size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx); ,"min_excess_idx")
-                TIME_MEASURE(i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx]; ,"min_excess")
-                TIME_MEASURE(size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0)); ,"min_excess_idx")
-                TIME_MEASURE(i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)]; ,"min_excess")
+                size_type rmq_sparse = get_min_excess_idx(rmq_sparse_idx);
+                i_value_type rmq_sparse_ex = m_min_excess[rmq_sparse_idx];
+                size_type rmq_e1 = get_min_excess_idx(sparse_i-(i != 0)); 
+                i_value_type rmq_e1_ex = m_min_excess[sparse_i-(i != 0)];
                 if (rmq_e1_ex < rmq_sparse_ex && rmq_e1 < i) {
-                    TIME_MEASURE(rmq_e1 = near_rmq(m_gct_bp,i,t_super_block_size*sparse_i,min_rel_ex); ,"Scan")
-                    TIME_MEASURE(rmq_e1_ex = m_rank_select.excess(rmq_e1); ,"Rank")
+                    rmq_e1 = near_rmq(m_gct_bp,i,t_super_block_size*sparse_i,min_rel_ex); 
+                    rmq_e1_ex = m_rank_select.excess(rmq_e1); 
                 }
 
-                TIME_MEASURE(size_type rmq_e2 = get_min_excess_idx(sparse_j); ,"min_excess_idx");
-                TIME_MEASURE(i_value_type rmq_e2_ex = m_min_excess[sparse_j]; ,"min_excess")
+                size_type rmq_e2 = get_min_excess_idx(sparse_j); 
+                i_value_type rmq_e2_ex = m_min_excess[sparse_j];
                 if (rmq_e2_ex <= rmq_sparse_ex && rmq_e2 > j) {
-                    TIME_MEASURE(rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex); ,"Scan")
-                    TIME_MEASURE(rmq_e2_ex = m_rank_select.excess(rmq_e2); ,"Rank")
+                    rmq_e2 = near_rmq(m_gct_bp,t_super_block_size*sparse_j,j,min_rel_ex); 
+                    rmq_e2_ex = m_rank_select.excess(rmq_e2);
                 }
-                TIME_MEASURE(auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
-                                                   rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
-                             size_type rmq_e = rmq_min.first;
-                             int_vector<>::value_type rmq_e_ex = rmq_min.second; ,"Other")
+                auto rmq_min = min_ex(rmq_e1,rmq_sparse,rmq_e2,
+                                      rmq_e1_ex,rmq_sparse_ex,rmq_e2_ex);
+                size_type rmq_e = rmq_min.first;
+                int_vector<>::value_type rmq_e_ex = rmq_min.second;
                 if (t_block_size == 0 || m_max_excess_v < m_max_excess_reverse_v) {
-                    RETURN_TIME_MEASURE(size_type,((rmq_e_ex+rmq_e)>>1); ,"Other",t_block_size)
+                    return ((rmq_e_ex+rmq_e)>>1); 
                 } else {
-                    RETURN_TIME_MEASURE(size_type,N-((rmq_e_ex+rmq_e)>>1)-1; ,"Other",t_block_size)
+                    return N-((rmq_e_ex+rmq_e)>>1)-1;
                 }
             }
         }
@@ -588,7 +426,7 @@ class rmq_succinct_rec
             m_min_excess.load(in);
             m_min_excess_idx.load(in);
             if (t_block_size > 0) {
-                m_rmq_recursive = new rmq_succinct_rec<t_block_size,0>();
+                m_rmq_recursive = new rmq_succinct_rec_new<t_block_size,0>();
                 m_rmq_recursive->load(in);
             } else {
                 m_sparse_rmq.load(in,&m_min_excess);

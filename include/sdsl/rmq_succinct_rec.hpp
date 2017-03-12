@@ -140,10 +140,10 @@ if(t_block_size > 0)                                    \
 namespace sdsl
 {
 
-template<uint32_t t_super_block_size=512,uint32_t t_block_size=128, bool t_min = true>
+template<uint32_t t_super_block_size=1024,uint32_t t_block_size=128, bool t_min = true>
 class rmq_succinct_rec;
 
-template<uint32_t t_super_block_size=512, uint32_t t_block_size=128>
+template<uint32_t t_super_block_size=1024, uint32_t t_block_size=128>
 struct range_maximum_bp_fast_rec {
     typedef rmq_succinct_rec<t_super_block_size, t_block_size, false> type;
 };

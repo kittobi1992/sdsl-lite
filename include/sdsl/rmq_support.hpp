@@ -56,6 +56,7 @@ struct min_max_trait<RandomAccessContainer, false, true> {
 #include "rmq_succinct_bp.hpp"
 #include "rmq_succinct_bp_fast.hpp"
 #include "rmq_succinct_rec.hpp"
+#include "rmq_succinct_rec_new.hpp"
 #include "rmq_succinct_rec_old.hpp"
 #include "rmq_succinct_sada.hpp"
 
