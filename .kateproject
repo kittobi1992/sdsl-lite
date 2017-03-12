@@ -1,5 +1,0 @@
-{
-	"name": "sdsl-lite",
-	"directory": "/home/theuer/Dokumente/sdsl-lite/",
-	"files": [ { "filters": [ "*.cpp", "*.hpp", "*.txt", "*.h", "*.in", "*.py", "*.sh", "*.config", "*.sdsl", "*.qry" ] } ]
-}
