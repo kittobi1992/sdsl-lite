@@ -201,7 +201,6 @@ private:
         
         inline bit_vector::size_type fast_rmq_scan(const bit_vector::size_type l, const bit_vector::size_type r) const {
             typedef bit_vector::size_type size_type;
-            typedef bit_vector::value_type value_type;
             typedef bit_vector::difference_type difference_type;
             
             

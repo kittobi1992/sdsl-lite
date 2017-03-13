@@ -30,11 +30,11 @@ namespace sdsl
 {
 
 
-template<class t_rac = int_vector<>, bool t_min=true, bool t_strict=true>
+template<bool t_min=true, bool t_strict=true, class t_rac = int_vector<>>
 class rmq_support_sparse_table;
 
 template<class t_rac = int_vector<> >
-using range_maximum_support_sparse_table = rmq_support_sparse_table<t_rac,false,true>;
+using range_maximum_support_sparse_table = rmq_support_sparse_table<false,true,t_rac>;
 
 
 //! A class to support range minimum or range maximum queries on a random access container.
@@ -53,7 +53,7 @@ using range_maximum_support_sparse_table = rmq_support_sparse_table<t_rac,false,
  *      \f$ \Order{n\log^2 n} \f$ bits for the data structure ( \f$ n=size() \f$ ).
  *       We used bit compression to get a good result in practice.
  */
-template<class t_rac, bool t_min, bool t_strict>
+template<bool t_min, bool t_strict,class t_rac>
 class rmq_support_sparse_table
 {
         const t_rac*              m_v;    // pointer to the supported random access container
