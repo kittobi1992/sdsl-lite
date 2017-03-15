@@ -38,12 +38,12 @@
 namespace sdsl
 {
 
-template<uint32_t t_super_block_size=1024,uint32_t t_block_size=128, uint32_t t_levels=2, bool t_min = true>
+template<bool t_min = true, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
 class rmq_succinct_rec_new;
 
-template<uint32_t t_super_block_size=1024, uint32_t t_block_size=128, uint32_t t_levels=2, bool t_min = false>
-struct range_maximum_bp_fast_rec_new {
-    typedef rmq_succinct_rec_new<t_super_block_size, t_block_size, t_levels, t_min> type;
+template<bool t_min = false, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
+struct range_maximum_rec_new {
+    typedef rmq_succinct_rec_new<t_min, t_super_block_size, t_block_sizes...> type;
 };
 
 
@@ -63,10 +63,10 @@ struct range_maximum_bp_fast_rec_new {
  * In Proceedings of Data Compression Conference, DCC'16.
  *
  */
-template<uint32_t t_super_block_size, uint32_t t_block_size, uint32_t t_levels, bool t_min>
+template<bool t_min, uint32_t t_super_block_size, uint32_t... t_block_sizes>
 class rmq_succinct_rec_new
 {
-        using recursive_rmq = rmq_succinct_rec_new<t_block_size,t_block_size,(t_levels == 0 ? 0 : t_levels-1),t_min>;
+        using recursive_rmq = rmq_succinct_rec_new<t_min, t_block_sizes...>;
         using sparse_table = rmq_support_sparse_table<true,false>;
 
         bool                        m_use_sparse_rmq;       // Indicate, if sparse rmq derminates the recursion
@@ -305,7 +305,7 @@ class rmq_succinct_rec_new
             if (v != nullptr) {
                 size_type bp_size = 2*v->size()+2;
                 m_gct_bp = bit_vector(bp_size,0);
-                if(t_levels > 0 && t_super_block_size <= bp_size) {
+                if(t_super_block_size > 0 && t_super_block_size <= bp_size) {
                     m_max_excess_v = construct_generalized_cartesian_tree<true,false>(v,false);
                     m_max_excess_reverse_v = construct_generalized_cartesian_tree<false,true>(v,false);
                     //Choose Cartesian Tree with minimal depth.
@@ -331,7 +331,7 @@ class rmq_succinct_rec_new
 
         //! Destructor
         ~rmq_succinct_rec_new() {
-            if (t_levels > 0 && m_gct_bp.size() > 2) {
+            if (t_super_block_size > 0 && m_gct_bp.size() > 2) {
                 delete m_rmq_recursive;
             }
         }
