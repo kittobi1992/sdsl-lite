@@ -34,9 +34,16 @@ namespace sdsl
 {
     
     
-    //! TODO
+    //! Class supports rank_1 and select_1 on BP sequences.
     /*!
-     * 
+     * \tparam t_sample_size If the depth of the BP sequence exceeds a certain threshold
+     *              	     every t_sample_size-th position of a 1-bit is sampled.
+     *  \tparam t_rank       Type of rank support used for the underlying BP sequence.
+     *
+     * \par Time complexity for select
+     *        \f$ \Order{\log{\log{n}}} \f$
+     * \par Space complexity:
+     *        \f$ o(n) \f$. 
      * 
      */
     template<uint32_t t_sample_size = 1024>
@@ -60,6 +67,7 @@ namespace sdsl
         
     private:
         
+        //! Calculates the maximum depth of a leaf in the BP sequence.
         void calculate_maximum_excess_value() {
             m_max_excess = std::numeric_limits<bit_vector::value_type>::min();
             bit_vector::value_type cur_excess = 0;
@@ -71,6 +79,7 @@ namespace sdsl
             if(m_v->size() <= 2) m_max_excess = 1;
         }        
         
+        //! Samples the position of every t_sample_size-th 1 of the BP sequence. 
         void generate_select_sample() {
             size_t N = m_v->size()/2;
             m_select_sample = int_vector<>(N/t_sample_size+2,0);
@@ -89,14 +98,14 @@ namespace sdsl
         
         //! Constructor
         /*
-         *  \param  v     Pointer to a bit vector
+         *  \param v  Pointer to the bit vector of the BP sequence.
          */
         rank_select_support_bp(const bit_vector* v=nullptr) {
             if (v != nullptr) {
                 set_vector(v);
                 m_bp_rank = rank_support_v5<>(v);
                 calculate_maximum_excess_value();
-//                  std::cout << m_max_excess << std::endl;
+                //Construct sample datastructure, if depth of BP sequence is to big
                 if(m_max_excess > t_sample_size) {
                     generate_select_sample();
                 }
@@ -135,14 +144,25 @@ namespace sdsl
             return *this;
         }
         
+        /*! Calculates the excess value at index i.
+         * \param i The index of which the excess value should be calculated.
+         */
         inline size_type excess(size_type idx) const {
             return (m_bp_rank(idx+1)<<1)-(idx+1);
         }
         
+        /*! Returns the number of opening parentheses up to and including index i.
+         * \pre{ \f$ 0\leq i < size() \f$ }
+         */
         inline size_type rank(size_type idx) const {
             return m_bp_rank.rank(idx);
         }
         
+        /*! Returns the index of the i-th opening parenthesis.
+         * \param i Number of the parenthesis to select.
+         * \pre{ \f$1\leq i < rank(size())\f$ }
+         * \post{ \f$ 0\leq select(i) < size() \f$ }
+         */
         inline size_type select(size_type idx, size_type left = 0, bool use_select_samples=true) const {
             
             //Initial restriction interval [l,r] for select_1(idx)
@@ -151,7 +171,7 @@ namespace sdsl
             
             
             //If the Depth of the BP-Sequence is greater than t_sample_size, we use select use_select_samples
-            //to further restrict the interval and to guarantee O(log(log(n))) running time
+            //to further restrict the interval and speed up the running time
             if(use_select_samples && m_max_excess > t_sample_size) {
                 size_t sample_idx = (idx-1)/t_sample_size;
                 l = std::max(l,m_select_sample[sample_idx]);
@@ -160,6 +180,9 @@ namespace sdsl
             
             size_type select_pos = 0, cur_rank = 0;
             
+            //If the restriction interval of the i-th opening parenthesis is greater than 128,
+            //we use the internal structure of rank_support_v5 to further restrict this interval
+            //to size smaller than 64.
             if(r-l >= 128) {
                 size_type bp_size = m_v->size();
                 size_type N = m_bp_rank.m_basic_block.size();
@@ -198,7 +221,11 @@ namespace sdsl
                 }
                 select_pos += i*64;
                 cur_rank -=  trait_type::full_word_rank(data,(i<<6));
-            } else if(r-l >= 64) {
+            } 
+            //If the restriction interval of the i-th opening parenthesis is smaller than 128
+            //and bigger than 64, we use simple binary search with the rank datastructure to 
+            //further restrict the interval.
+            else if(r-l >= 64) {
                 while(r - l >= 64) {
                     size_type m = (l+r)/2;
                     if(m_bp_rank.rank(m) < idx) l = m+1;
@@ -207,6 +234,8 @@ namespace sdsl
                 select_pos = l;
                 cur_rank = m_bp_rank(select_pos);
             }
+            //If the restriction interval of the i-th opening parenthesis is smaller than 64,
+            //we simple calculate the rank on position l.
             else {
                 select_pos = l;
                 cur_rank = m_bp_rank(select_pos);
