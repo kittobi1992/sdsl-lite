@@ -47,7 +47,7 @@ namespace sdsl
  * @ingroup int_vector
  */
 template<class t_int_vector=vlc_vector<>, class t_bit_vector=sd_vector<>,
-         uint32_t t_dens = 4, uint8_t t_width=0>
+         uint32_t t_dens = 8, uint8_t t_width=0>
 class rl_enc_vector
 {
     private:
@@ -333,9 +333,13 @@ rl_enc_vector<>::size_type rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_widt
     written_bytes += write_member(m_run_count, out, child, "number runs");
     written_bytes += m_differences.serialize(out, child, "differences");
     written_bytes += m_samples.serialize(out, child, "samples");
+    std::cout << written_bytes << std::endl;
     written_bytes += m_run_marker.serialize(out, child, "run marker"); 
+    std::cout << written_bytes << std::endl;
     written_bytes += m_run_rank.serialize(out, child, "run marker rank"); 
+    std::cout << written_bytes << std::endl;
     written_bytes += m_run_select.serialize(out, child, "run marker select"); 
+    std::cout << written_bytes << std::endl;
     structure_tree::add_size(child, written_bytes);
     return written_bytes;
 }
@@ -346,6 +350,7 @@ void rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::load(std::istream&
     read_member(m_size, in);
     read_member(m_run_count, in);
     m_differences.load(in);
+    m_samples.load(in);
     m_run_marker.load(in);
     m_run_rank.load(in, &m_run_marker);
     m_run_select.load(in, &m_run_marker);
