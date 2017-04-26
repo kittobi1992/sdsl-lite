@@ -47,7 +47,7 @@ namespace sdsl
  * @ingroup int_vector
  */
 template<class t_int_vector=vlc_vector<>, class t_bit_vector=sd_vector<>,
-         uint32_t t_dens = 1, uint8_t t_width=0>
+         uint32_t t_dens = 4, uint8_t t_width=0>
 class rl_enc_vector
 {
     private:
@@ -67,9 +67,10 @@ class rl_enc_vector
     private:
         size_type         m_size = 0;                // number of vector elements
 
+        //TODO(heuer): Use two-complement to store negative differences
         t_int_vector m_differences;
-        bit_vector m_sign;
 
+        //TODO(heuer): Later store as sd_vector
         t_int_vector m_samples;
 
         t_bit_vector m_run_marker;
@@ -89,12 +90,7 @@ class rl_enc_vector
         }
 
         inline value_type encode_difference(const size_type run_idx, const value_type value_before) const {
-            if(m_sign[run_idx]) {
-                return -(m_differences[run_idx] - value_before);
-            }
-            else {
                 return m_differences[run_idx] + value_before;
-            }
         }
 
     public:
@@ -198,6 +194,7 @@ template<class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_widt
 inline typename rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::value_type 
         rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::operator[](const size_type i)const
 {
+    //TODO(heuer): m_run_rank(i+1) - 1 
     size_type run_idx = m_run_rank(i) - !m_run_marker[i];
     size_type run_idx_select = m_run_select(run_idx + 1);
     size_type sample_idx = run_idx/t_dens;
@@ -228,7 +225,7 @@ void rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::swap(rl_enc_vector
         std::swap(m_size, v.m_size);
         std::swap(m_run_count, v.m_run_count);
         m_differences.swap(v.m_differences);
-        m_sign.swap(v.m_sign);
+        m_samples.swap(v.m_samples);
         m_run_marker.swap(m_run_marker);
         util::swap_support(m_run_rank, v.m_run_rank,
                            &m_run_marker, &(v.m_run_marker));
@@ -249,9 +246,8 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(const Con
 
     int_vector<> differences = int_vector<>(m_size,0);
     int_vector<> samples = int_vector<>(m_size,0);
-    m_sign = bit_vector(m_size,0);
 
-    bit_vector run_marker= bit_vector(m_size+1,0);
+    bit_vector run_marker = bit_vector(m_size+1,0);
     run_marker[0] = 1; run_marker[m_size] = 1;
 
     m_run_count = 0;
@@ -262,10 +258,8 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(const Con
             run_marker[i] = 1;
             if(c[i] >= c[i-1]) {
                 differences[m_run_count] = c[i] - c[i-1];
-                m_sign[m_run_count] = 0;
             } else {
-                differences[m_run_count] = c[i-1] - c[i];
-                m_sign[m_run_count] = 1;
+                differences[m_run_count] = std::numeric_limits<value_type>::max() - (c[i-1] - c[i]) + 1;
             }
             if(m_run_count % t_dens == 0) {
                 samples[m_run_count/t_dens] = c[i-1];
@@ -275,7 +269,6 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(const Con
     }
 
     differences.resize(m_run_count);
-    m_sign.resize(m_run_count);
     samples.resize(m_run_count/t_dens+1);
 
     m_differences = t_int_vector(differences);
@@ -297,7 +290,6 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(int_vecto
 
     int_vector<> differences = int_vector<>(m_size,0);
     int_vector<> samples = int_vector<>(m_size,0);
-    m_sign = bit_vector(m_size,0);
 
     bit_vector run_marker= bit_vector(m_size+1,0);
     run_marker[0] = 1; run_marker[m_size] = 1;
@@ -310,10 +302,8 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(int_vecto
             run_marker[i] = 1;
             if(v_buf[i] >= v_buf[i-1]) {
                 differences[m_run_count] = v_buf[i] - v_buf[i-1];
-                m_sign[m_run_count] = 0;
             } else {
-                differences[m_run_count] = v_buf[i-1] - v_buf[i];
-                m_sign[m_run_count] = 1;
+                differences[m_run_count] = std::numeric_limits<value_type>::max() - (v_buf[i-1] - v_buf[i]) + 1;
             }
             if(m_run_count % t_dens == 0) {
                 samples[m_run_count/t_dens] = v_buf[i-1];
@@ -323,7 +313,6 @@ rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::rl_enc_vector(int_vecto
     }
 
     differences.resize(m_run_count);
-    m_sign.resize(m_run_count);
     samples.resize(m_run_count/t_dens+1);
 
     m_differences = t_int_vector(differences);
@@ -343,7 +332,6 @@ rl_enc_vector<>::size_type rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_widt
     written_bytes += write_member(m_size, out, child, "size");
     written_bytes += write_member(m_run_count, out, child, "number runs");
     written_bytes += m_differences.serialize(out, child, "differences");
-    written_bytes += m_sign.serialize(out, child, "sign flag");
     written_bytes += m_samples.serialize(out, child, "samples");
     written_bytes += m_run_marker.serialize(out, child, "run marker"); 
     written_bytes += m_run_rank.serialize(out, child, "run marker rank"); 
@@ -358,7 +346,6 @@ void rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::load(std::istream&
     read_member(m_size, in);
     read_member(m_run_count, in);
     m_differences.load(in);
-    m_sign.load(in);
     m_run_marker.load(in);
     m_run_rank.load(in, &m_run_marker);
     m_run_select.load(in, &m_run_marker);
