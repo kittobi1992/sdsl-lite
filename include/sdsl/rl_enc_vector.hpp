@@ -194,8 +194,7 @@ template<class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_widt
 inline typename rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::value_type 
         rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::operator[](const size_type i)const
 {
-    //TODO(heuer): m_run_rank(i+1) - 1 
-    size_type run_idx = m_run_rank(i) - !m_run_marker[i];
+    size_type run_idx = m_run_rank(i+1) - 1;
     size_type run_idx_select = m_run_select(run_idx + 1);
     size_type sample_idx = run_idx/t_dens;
     size_type cur_run_idx = sample_idx * t_dens;
@@ -226,11 +225,11 @@ void rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_width>::swap(rl_enc_vector
         std::swap(m_run_count, v.m_run_count);
         m_differences.swap(v.m_differences);
         m_samples.swap(v.m_samples);
-        m_run_marker.swap(m_run_marker);
         util::swap_support(m_run_rank, v.m_run_rank,
                            &m_run_marker, &(v.m_run_marker));
         util::swap_support(m_run_select, v.m_run_select,
-                           &m_run_marker, &(v.m_run_marker));                          
+                           &m_run_marker, &(v.m_run_marker));
+        m_run_marker.swap(v.m_run_marker);
     }
 }
 
@@ -333,13 +332,9 @@ rl_enc_vector<>::size_type rl_enc_vector<t_int_vector,t_bit_vector,t_dens,t_widt
     written_bytes += write_member(m_run_count, out, child, "number runs");
     written_bytes += m_differences.serialize(out, child, "differences");
     written_bytes += m_samples.serialize(out, child, "samples");
-    std::cout << written_bytes << std::endl;
     written_bytes += m_run_marker.serialize(out, child, "run marker"); 
-    std::cout << written_bytes << std::endl;
     written_bytes += m_run_rank.serialize(out, child, "run marker rank"); 
-    std::cout << written_bytes << std::endl;
     written_bytes += m_run_select.serialize(out, child, "run marker select"); 
-    std::cout << written_bytes << std::endl;
     structure_tree::add_size(child, written_bytes);
     return written_bytes;
 }
