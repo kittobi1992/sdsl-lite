@@ -1,5 +1,6 @@
 #include "sdsl/int_vector.hpp"
 #include "sdsl/rl_enc_vector.hpp"
+#include "sdsl/rl_inc_vector.hpp"
 #include "sdsl/util.hpp"
 #include "gtest/gtest.h"
 #include <vector>
@@ -72,6 +73,16 @@ TEST_F(RlEncVectorTest, CheckValuesOfVectorWithLessRuns) {
     }
 }
 
+
+TEST_F(RlEncVectorTest, CheckValuesOfVectorWithLessRuns2)
+{
+    sdsl::rl_inc_vector<> rl_vec(less_runs);
+    ASSERT_EQ(rl_vec.size(), less_runs.size());
+    for (size_type i = 0; i < size; ++i)
+    {
+        ASSERT_EQ(rl_vec[i], less_runs[i]);
+    }
+}
 }
 
 int main(int argc, char** argv)

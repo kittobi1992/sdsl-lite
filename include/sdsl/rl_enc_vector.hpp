@@ -67,7 +67,6 @@ class rl_enc_vector
     private:
         size_type         m_size = 0;                // number of vector elements
 
-        //TODO(heuer): Use two-complement to store negative differences
         t_int_vector m_differences;
 
         //TODO(heuer): Later store as sd_vector
