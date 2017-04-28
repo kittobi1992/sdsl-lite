@@ -44,7 +44,7 @@ namespace sdsl
  *  This class is a parameter of csa_sada.
  * @ingroup int_vector
  */
-template <class t_bit_vector = sd_vector<>,
+template <class t_int_vector = vlc_vector<>, class t_bit_vector = sd_vector<>,
           uint32_t t_dens = 8, uint8_t t_width = 0>
 class rl_inc_vector
 {
@@ -64,10 +64,8 @@ class rl_inc_vector
 
   private:
     size_type m_size = 0; // number of vector elements
-    size_type m_run_count;
 
-    t_bit_vector m_differences;
-    select_support m_differences_select;
+    t_int_vector m_differences;
 
     t_bit_vector m_samples;
     select_support m_samples_select;
@@ -75,6 +73,8 @@ class rl_inc_vector
     t_bit_vector m_run_marker;
     rank_support m_run_rank;
     select_support m_run_select;
+
+    size_type m_run_count;
 
     void clear()
     {
@@ -87,19 +87,9 @@ class rl_inc_vector
         return m_run_select(run_idx + 2) - m_run_select(run_idx + 1) - 1;
     }
 
-    inline value_type difference(const size_type run_idx) const 
-    {
-        if(run_idx == 0) {
-            return m_differences_select(run_idx+1);
-        } else {
-            return m_differences_select(run_idx + 1) - m_differences_select(run_idx);
-        }
-    }
-
     inline value_type encode_difference(const size_type run_idx, const value_type value_before) const
     {
-        //std::cout << run_idx << " " << difference(run_idx) << std::endl;
-        return difference(run_idx) + value_before;
+        return m_differences[run_idx] + value_before;
     }
 
   public:
@@ -199,15 +189,16 @@ class rl_inc_vector
         };*/
 };
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
-inline typename rl_inc_vector<t_bit_vector, t_dens, t_width>::value_type
-    rl_inc_vector<t_bit_vector, t_dens, t_width>::operator[](const size_type i) const
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+inline typename rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::value_type
+    rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::operator[](const size_type i) const
 {
     size_type run_idx = m_run_rank(i + 1) - 1;
     size_type run_idx_select = m_run_select(run_idx + 1);
     size_type sample_idx = run_idx / t_dens;
     size_type cur_run_idx = sample_idx * t_dens;
     value_type val = m_samples_select(sample_idx+1);
+    //std::cout << sample_idx << " " << val << std::endl;
     for (; cur_run_idx <= run_idx; ++cur_run_idx)
     {
         val = encode_difference(cur_run_idx, val);
@@ -220,7 +211,7 @@ inline typename rl_inc_vector<t_bit_vector, t_dens, t_width>::value_type
     return val;
 }
 
-/*template<class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+/*template<class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
 inline typename rl_inc_vector<t_coder, t_dens,t_width>::value_type rl_inc_vector<t_coder, t_dens,t_width>::sample(const size_type i)const
 {
     assert(i*get_sample_dens()+1 != 0);
@@ -228,15 +219,13 @@ inline typename rl_inc_vector<t_coder, t_dens,t_width>::value_type rl_inc_vector
     return m_sample_vals_and_pointer[i<<1];
 }*/
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
-void rl_inc_vector<t_bit_vector, t_dens, t_width>::swap(rl_inc_vector<t_bit_vector, t_dens, t_width> &v)
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+void rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::swap(rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width> &v)
 {
     if (this != &v)
     {
         std::swap(m_size, v.m_size);
         std::swap(m_run_count, v.m_run_count);
-        util::swap_support(m_differences_select, v.m_differences_select,
-                           &m_differences, &(v.m_differences));
         m_differences.swap(v.m_differences);
         util::swap_support(m_samples_select, v.m_samples_select,
                            &m_samples, &(v.m_samples));
@@ -249,9 +238,9 @@ void rl_inc_vector<t_bit_vector, t_dens, t_width>::swap(rl_inc_vector<t_bit_vect
     }
 }
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
 template <class Container>
-rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(const Container &c)
+rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::rl_inc_vector(const Container &c)
 {
 
     // clear bit_vectors
@@ -259,26 +248,29 @@ rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(const Container &c)
 
     m_size = c.size();
 
-    bit_vector dif_prefix_sum(c[m_size - 1] + 1);
-    size_type prefix_sum = c[0];
-    dif_prefix_sum[prefix_sum] = 1;
-
-    bit_vector samples = bit_vector(c[m_size - 1] + 1, 0);
+    int_vector<> differences = int_vector<>(m_size, 0);
+    bit_vector samples = bit_vector(c[m_size-1]+1, 0);
     samples[0] = 1;
 
     bit_vector run_marker = bit_vector(m_size + 1, 0);
     run_marker[0] = 1;
     run_marker[m_size] = 1;
 
-    m_run_count = 1;
+    m_run_count = 0;
+    differences[m_run_count++] = c[0];
     for (size_type i = 1; i < m_size; ++i)
     {
         if (c[i] != c[i - 1] + 1)
         {
             run_marker[i] = 1;
-            prefix_sum += c[i] - c[i - 1];
-            dif_prefix_sum[prefix_sum] = 1;
-
+            if (c[i] >= c[i - 1])
+            {
+                differences[m_run_count] = c[i] - c[i - 1];
+            }
+            else
+            {
+                differences[m_run_count] = std::numeric_limits<value_type>::max() - (c[i - 1] - c[i]) + 1;
+            }
             if (m_run_count % t_dens == 0)
             {
                 samples[c[i - 1]] = 1;
@@ -287,30 +279,27 @@ rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(const Container &c)
         }
     }
 
+    differences.resize(m_run_count);
 
-    m_differences = t_bit_vector(dif_prefix_sum);
+    m_differences = t_int_vector(differences);
     m_run_marker = t_bit_vector(run_marker);
     m_samples = t_bit_vector(samples);
 
-    m_differences_select = select_support(&m_differences);
     m_run_rank = rank_support(&m_run_marker);
     m_run_select = select_support(&m_run_marker);
     m_samples_select = select_support(&m_samples);
 }
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
 template <uint8_t int_width>
-rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(int_vector_buffer<int_width> &v_buf)
+rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::rl_inc_vector(int_vector_buffer<int_width> &v_buf)
 {
     // clear bit_vectors
     clear();
 
     m_size = v_buf.size();
 
-    bit_vector dif_prefix_sum(v_buf[m_size - 1] + 1);
-    size_type prefix_sum = v_buf[0];
-    dif_prefix_sum[prefix_sum] = 1;
-
+    int_vector<> differences = int_vector<>(m_size, 0);
     bit_vector samples = bit_vector(v_buf[m_size - 1] + 1, 0);
     samples[0] = 1;
 
@@ -318,15 +307,21 @@ rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(int_vector_buffer<in
     run_marker[0] = 1;
     run_marker[m_size] = 1;
 
-    m_run_count = 1;
+    m_run_count = 0;
+    differences[m_run_count++] = v_buf[0];
     for (size_type i = 1; i < m_size; ++i)
     {
         if (v_buf[i] != v_buf[i - 1] + 1)
         {
             run_marker[i] = 1;
-            prefix_sum += v_buf[i] - v_buf[i - 1];
-            dif_prefix_sum[prefix_sum] = 1;
-
+            if (v_buf[i] >= v_buf[i - 1])
+            {
+                differences[m_run_count] = v_buf[i] - v_buf[i - 1];
+            }
+            else
+            {
+                differences[m_run_count] = std::numeric_limits<value_type>::max() - (v_buf[i - 1] - v_buf[i]) + 1;
+            }
             if (m_run_count % t_dens == 0)
             {
                 samples[v_buf[i - 1]] = 1;
@@ -335,25 +330,25 @@ rl_inc_vector<t_bit_vector, t_dens, t_width>::rl_inc_vector(int_vector_buffer<in
         }
     }
 
-    m_differences = t_bit_vector(dif_prefix_sum);
+    differences.resize(m_run_count);
+
+    m_differences = t_int_vector(differences);
     m_run_marker = t_bit_vector(run_marker);
     m_samples = t_bit_vector(samples);
 
-    m_differences_select = select_support(&m_differences);
     m_run_rank = rank_support(&m_run_marker);
     m_run_select = select_support(&m_run_marker);
     m_samples_select = select_support(&m_samples);
 }
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
-rl_inc_vector<>::size_type rl_inc_vector<t_bit_vector, t_dens, t_width>::serialize(std::ostream &out, structure_tree_node *v, std::string name) const
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+rl_inc_vector<>::size_type rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::serialize(std::ostream &out, structure_tree_node *v, std::string name) const
 {
     structure_tree_node *child = structure_tree::add_child(v, name, util::class_name(*this));
     size_type written_bytes = 0;
     written_bytes += write_member(m_size, out, child, "size");
     written_bytes += write_member(m_run_count, out, child, "number runs");
     written_bytes += m_differences.serialize(out, child, "differences");
-    written_bytes += m_differences_select.serialize(out, child, "differences select");
     written_bytes += m_samples.serialize(out, child, "samples");
     written_bytes += m_samples_select.serialize(out, child, "samples select");
     written_bytes += m_run_marker.serialize(out, child, "run marker");
@@ -363,13 +358,12 @@ rl_inc_vector<>::size_type rl_inc_vector<t_bit_vector, t_dens, t_width>::seriali
     return written_bytes;
 }
 
-template <class t_bit_vector, uint32_t t_dens, uint8_t t_width>
-void rl_inc_vector<t_bit_vector, t_dens, t_width>::load(std::istream &in)
+template <class t_int_vector, class t_bit_vector, uint32_t t_dens, uint8_t t_width>
+void rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::load(std::istream &in)
 {
     read_member(m_size, in);
     read_member(m_run_count, in);
     m_differences.load(in);
-    m_differences_select.load(in, &m_differences);
     m_samples.load(in);
     m_samples_select.load(in, &m_samples);
     m_run_marker.load(in);
