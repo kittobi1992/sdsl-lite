@@ -83,6 +83,8 @@ TEST_F(RlEncVectorTest, CheckValuesOfVectorWithLessRuns2)
         ASSERT_EQ(rl_vec[i], less_runs[i]);
     }
 }
+
+
 }
 
 int main(int argc, char** argv)

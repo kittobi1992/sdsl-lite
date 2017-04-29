@@ -22,12 +22,14 @@
 #define SDSL_RL_INC_VECTOR
 
 #include "int_vector.hpp"
-#include "vlc_vector.hpp"
+#include "dac_vector.hpp"
 #include "bit_vectors.hpp"
 #include "rank_support.hpp"
 #include "select_support.hpp"
 #include "coder.hpp"
 #include "iterators.hpp"
+
+#include <set>
 
 //! Namespace for the succinct data structure library.
 namespace sdsl
@@ -44,7 +46,7 @@ namespace sdsl
  *  This class is a parameter of csa_sada.
  * @ingroup int_vector
  */
-template <class t_int_vector = vlc_vector<>, class t_bit_vector = sd_vector<>,
+template <class t_int_vector = dac_vector<>, class t_bit_vector = sd_vector<>,
           uint32_t t_dens = 8, uint8_t t_width = 0>
 class rl_inc_vector
 {
@@ -278,7 +280,6 @@ rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::rl_inc_vector(const 
             m_run_count++;
         }
     }
-
     differences.resize(m_run_count);
 
     m_differences = t_int_vector(differences);
