@@ -10,5 +10,6 @@
 #include "rrr_vector.hpp"
 #include "sd_vector.hpp"
 #include "hyb_vector.hpp"
+#include "rl_bit_vector.hpp"
 
 #endif

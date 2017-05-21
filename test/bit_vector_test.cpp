@@ -35,7 +35,8 @@ rrr_vector<127>,
 rrr_vector<128>,
 sd_vector<>,
 sd_vector<rrr_vector<63> >,
-hyb_vector<>
+hyb_vector<>,
+rl_bit_vector<>
 > Implementations;
 
 
