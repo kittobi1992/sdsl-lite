@@ -42,7 +42,7 @@ class select_support_rl;
 /*!
  * 
  */
-template<class t_bit_vector   = sd_vector<>>
+template<class t_bit_vector = sd_vector<>>
 class rl_bit_vector
 {
     public:
@@ -120,8 +120,7 @@ class rl_bit_vector
                 util::init_support(m_b1_rank_1, &m_b1);
                 util::init_support(m_b1_select_1, &m_b1);
 
-                //(1) Setup bit vector run length in unary encoding
-                //    E.g. Run of length 5 is encoded into 00001
+                //(2) Setup bit vector with run lengths in unary encoding
                 bit_vector tmp_b_rl(total_runs_length,0);
                 size_t idx = 0;
                 for(size_type i = 0; i < m_size-1; ++i) {
@@ -390,33 +389,6 @@ class rank_support_rl
         }
 };
 
-template<uint8_t t_b, class t_rl_vec>
-struct select_support_rl_trait {
-    typedef bit_vector::size_type size_type;
-    static size_type select(size_type i, const t_rl_vec* v)
-    {
-        size_type r = v->b_rl_rank_1(i-1) + 1;
-        size_type k = (i-1) - (r == 1 ? 0 : v->b_rl_select_1(r-1) + 1);
-        return v->b1_select_1(r) + k ;
-    }
-};
-
-template<class t_rl_vec>
-struct select_support_rl_trait<0, t_rl_vec> {
-    typedef bit_vector::size_type size_type;
-    static size_type select(size_type i, const t_rl_vec* v)
-    {
-        rank_support_rl<0, typename t_rl_vec::bit_vector_type> rank0(v);
-        size_type l = 0, r = v->size();
-        while(l < r) {
-            size_type m = (l+r)/2;
-            size_type rank_m = rank0(m);
-            if(rank_m < i) l = m + 1;
-            else r = m;
-        }
-        return l - 1;
-    }
-};
 
 //! Select data structure for sd_vector
 /*! \tparam t_b             Bit pattern.
@@ -445,7 +417,9 @@ class select_support_rl
         //! Returns the position of the i-th occurrence in the bit vector.
         size_type select(size_type i)const
         {
-            return select_support_rl_trait<t_b,bit_vector_type>::select(i, m_v);
+            size_type r = m_v->b_rl_rank_1(i-1) + 1;
+            size_type k = (i-1) - (r == 1 ? 0 : m_v->b_rl_select_1(r-1) + 1);
+            return m_v->b1_select_1(r) + k ;
         }
 
         size_type operator()(size_type i)const
@@ -481,6 +455,103 @@ class select_support_rl
         size_type serialize(std::ostream& out, structure_tree_node* v=nullptr, std::string name="")const
         {
             return serialize_empty_object(out, v, name, this);
+        }
+};
+
+template<class t_bit_vector>
+class select_support_rl<0, t_bit_vector>
+{
+    public:
+        typedef bit_vector::size_type size_type;
+        typedef rl_bit_vector<t_bit_vector> bit_vector_type;
+        typedef typename t_bit_vector::rank_1_type rank_support;
+        enum { bit_pat = 0 };
+        enum { bit_pat_len = (uint8_t)1 };
+    private:
+
+        const bit_vector_type* m_v;
+        t_bit_vector m_b_rl_0;
+        rank_support m_b_rl_0_rank_1;
+        bool first_bit;
+    public:
+
+        explicit select_support_rl(const bit_vector_type* v=nullptr)
+        {
+            set_vector(v);
+        }
+
+        //! Returns the position of the i-th occurrence in the bit vector.
+        size_type select(size_type i)const
+        {
+            size_type r = m_b_rl_0_rank_1(i-1) + first_bit;
+            if(r == 0) return i-1;
+            return m_v->b_rl_select_1(r) + i;
+        }
+
+        size_type operator()(size_type i)const
+        {
+            return select(i);
+        }
+
+        size_type size()const
+        {
+            return m_v->size();
+        }
+
+        void set_vector(const bit_vector_type* v=nullptr)
+        {
+            m_v = v;
+            if(m_v && m_v->size() > 0) {
+                first_bit = m_v->b1[0];
+                size_type run_length_1 = v->b_rl.size();
+                size_type run_length_0 = v->size() - run_length_1;
+                size_type num_runs_1 = v->b_rl_rank_1(v->b_rl.size());
+                bit_vector tmp_b_rl_0(run_length_0,0);
+                if(run_length_0) {
+                    size_type idx = 0;
+                    size_type last_start_run_one = num_runs_1 == 0 ? v->size() : v->b1_select_1(1);
+                    if(!first_bit) {
+                        idx = last_start_run_one;
+                        tmp_b_rl_0[idx-1] = 1;
+                    }
+
+                    for(size_t i = 1; i <= num_runs_1; ++i) {
+                        size_type next_start_run_one = (i == num_runs_1 ? v->size() : v->b1_select_1(i+1));
+                        size_type run_length = v->get_run_length(i);
+                        idx += (next_start_run_one - last_start_run_one - run_length);
+                        tmp_b_rl_0[idx-1] = 1;
+                        last_start_run_one = next_start_run_one;
+                    }
+                }
+                util::assign(m_b_rl_0, tmp_b_rl_0);
+                util::init_support(m_b_rl_0_rank_1, &m_b_rl_0);
+            }
+        }
+
+        select_support_rl& operator=(const select_support_rl& ss)
+        {
+            if (this != &ss) {
+                set_vector(ss.m_v);
+            }
+            return *this;
+        }
+
+        void swap(select_support_rl& ss) { }
+
+        void load(std::istream&, const bit_vector_type* v=nullptr)
+        {
+            set_vector(v);
+        }
+
+        size_type serialize(std::ostream& out, structure_tree_node* v=nullptr, std::string name="")const
+        {
+            structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
+            size_type written_bytes = 0;
+            written_bytes += write_member(first_bit, out, child, "first bit");
+            written_bytes += m_b_rl_0.serialize(out, child, "b_rl_0");
+            written_bytes += m_b_rl_0_rank_1.serialize(out, child, "m_b_rl_0_rank");
+            structure_tree::add_size(child, written_bytes);
+            return written_bytes;
         }
 };
 
