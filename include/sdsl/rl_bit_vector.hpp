@@ -149,11 +149,32 @@ class rl_bit_vector
 
             size_type m = std::distance(begin,end);
             m_size = *(end-1)+1;
-            bit_vector bv(m_size,0);
-            for(t_itr cur = begin; cur != end; ++cur) {
-                bv[*cur] = 1;
+            int_vector<> run_heads(m);
+            int_vector<> run_length(m);
+
+            t_itr cur = begin;
+            run_heads[0] = *cur;
+            value_type last_value = *(cur++);
+            size_type run_start = 0, num_runs = 1;
+            for(size_type i = 1; cur != end; ++cur, ++i) {
+                value_type value = *cur;
+                if(value != last_value + 1) {
+                    run_length[num_runs-1] = i-1;
+                    run_heads[num_runs++] = value;
+                }
+                last_value = value;
             }
-            util::assign(*this, bv);
+            run_length[num_runs-1] = m-1;
+            run_heads.resize(num_runs);
+            run_length.resize(num_runs);
+
+            m_b1 = t_bit_vector(run_heads.begin(),run_heads.end());
+            m_b_rl = t_bit_vector(run_length.begin(),run_length.end());
+
+            util::init_support(m_b1_rank_1, &m_b1);
+            util::init_support(m_b1_select_1, &m_b1);
+            util::init_support(m_b_rl_rank_1, &m_b_rl);
+            util::init_support(m_b_rl_select_1, &m_b_rl);
         }
 
 

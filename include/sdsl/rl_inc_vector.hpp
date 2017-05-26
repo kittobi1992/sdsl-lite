@@ -229,14 +229,14 @@ void rl_inc_vector<t_int_vector, t_bit_vector, t_dens, t_width>::swap(rl_inc_vec
         std::swap(m_size, v.m_size);
         std::swap(m_run_count, v.m_run_count);
         m_differences.swap(v.m_differences);
+        m_samples.swap(v.m_samples);
         util::swap_support(m_samples_select, v.m_samples_select,
                            &m_samples, &(v.m_samples));
-        m_samples.swap(v.m_samples);
+        m_run_marker.swap(v.m_run_marker);
         util::swap_support(m_run_rank, v.m_run_rank,
                            &m_run_marker, &(v.m_run_marker));
         util::swap_support(m_run_select, v.m_run_select,
                            &m_run_marker, &(v.m_run_marker));
-        m_run_marker.swap(v.m_run_marker);
     }
 }
 

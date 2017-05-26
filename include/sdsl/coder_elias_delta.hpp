@@ -120,6 +120,21 @@ class elias_delta
         template<bool t_sumup, bool t_inc,class t_iter>
         static uint64_t decode(const uint64_t* data, const size_type start_idx, size_type n, t_iter it=(t_iter)nullptr);
 
+        static uint64_t decode(const uint64_t* data, const size_type start_idx) {
+            data += (start_idx >> 6);
+            uint64_t value = 0;
+            size_type len_1_len, len;
+            uint8_t offset = start_idx & 0x3F;
+            len_1_len = bits::read_unary_and_move(data, offset); // read length of length of x
+            if (!len_1_len) {
+                value += 1;
+            } else {
+                len 	=  bits::read_int_and_move(data, offset, len_1_len) + (1ULL << len_1_len);
+                value	+= bits::read_int_and_move(data, offset, len-1) + (len-1<64) * (1ULL << (len-1));
+            }
+            return value;
+        }
+
         //! Decode n Elias delta encoded integers beginning at start_idx in the bitstring "data"  and return the sum of these values.
         /*! \param data Pointer to the beginning of the Elias delta encoded bitstring.
             \param start_idx Index of the first bit to endcode the values from.
@@ -140,7 +155,7 @@ class elias_delta
         */
         static void encode(uint64_t x, uint64_t*& z, uint8_t& offset);
 
-        static uint64_t decode(const uint64_t *&z, uint8_t &offset)
+        /*static uint64_t decode(const uint64_t *&z, uint8_t &offset)
         {
             size_type len_1_len;
             len_1_len = bits::read_unary_and_move(z, offset); // read length of length of x
@@ -150,7 +165,7 @@ class elias_delta
             }
             size_type len = bits::read_int_and_move(z, offset, len_1_len) + (1ULL << len_1_len);
             return bits::read_int_and_move(z, offset, len - 1) + (len - 1 < 64) * (1ULL << (len - 1));
-        }
+        }*/
 
         template<class int_vector>
         static uint64_t* raw_data(int_vector& v)
