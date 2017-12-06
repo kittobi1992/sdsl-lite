@@ -38,12 +38,12 @@
 namespace sdsl
 {
 
-template<bool t_min = true, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
+template<bool t_min = true, uint32_t t_st_block_size = 0, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
 class rmq_succinct_rec_new;
 
-template<bool t_min = false, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
+template<bool t_min = false, uint32_t t_st_block_size = 0, uint32_t t_super_block_size=1024, uint32_t... t_block_sizes>
 struct range_maximum_rec_new {
-    typedef rmq_succinct_rec_new<t_min, t_super_block_size, t_block_sizes...> type;
+    typedef rmq_succinct_rec_new<t_min, t_st_block_size, t_super_block_size, t_block_sizes...> type;
 };
 
 
@@ -63,10 +63,10 @@ struct range_maximum_rec_new {
  * In Proceedings of Data Compression Conference, DCC'16.
  *
  */
-template<bool t_min, uint32_t t_super_block_size, uint32_t... t_block_sizes>
+template<bool t_min, uint32_t t_st_block_size, uint32_t t_super_block_size, uint32_t... t_block_sizes>
 class rmq_succinct_rec_new
 {
-        using recursive_rmq = rmq_succinct_rec_new<t_min, t_block_sizes...>;
+        using recursive_rmq = rmq_succinct_rec_new<t_min, t_st_block_size, t_block_sizes...>;
         using sparse_table = rmq_support_sparse_table<true,false>;
 
         bool                        m_use_sparse_rmq;       // Indicate, if sparse rmq derminates the recursion
@@ -74,8 +74,8 @@ class rmq_succinct_rec_new
         int_vector<>                m_min_excess_idx;       // Relative indicies of the minimum excess values inside a block
         int_vector<>                m_min_excess;           // Minimum excess values inside a block
         sparse_table                m_sparse_rmq;           // Sparse-RMQ (only build, if we terminate the recursion)
-        int_vector<>*               m_sample_idx;
-        int_vector<>*               m_sample_val;
+        int_vector<>                m_sample_idx;
+        int_vector<>                m_sample_val;
         sparse_table*               m_sparse_table;
         recursive_rmq*              m_rmq_recursive;        // Recursive-RMQ
         rank_select_support_bp<>    m_rank_select;          // Rank and Select-Datastructure
@@ -90,10 +90,13 @@ class rmq_succinct_rec_new
                 m_rank_select.set_vector(&m_gct_bp);
                 m_min_excess = rm.m_min_excess;
                 m_min_excess_idx = rm.min_excess_idx;
-                m_sample_idx = rm.m_sample_idx;
-                m_sample_val = rm.m_sample_val;
-                m_sparse_table = rm.m_sparse_table;
-                m_sparse_table->set_vector(m_sample_val);
+                m_sparse_table = nullptr;
+                if(t_st_block_size) {
+                    m_sample_idx = rm.m_sample_idx;
+                    m_sample_val = rm.m_sample_val;
+                    m_sparse_table = rm.m_sparse_table;
+                    m_sparse_table->set_vector(&m_sample_val);
+                }
                 m_rmq_recursive = rm.m_rmq_recursive;
                 m_max_excess_v = rm.m_max_excess_v;
                 m_max_excess_reverse_v = rm.m_max_excess_reverse_v;
@@ -107,7 +110,7 @@ class rmq_succinct_rec_new
     private:
 
         template<class t_rac>
-        rmq_succinct_rec_new() : m_rmq_recursive(nullptr), m_sparse_table(nullptr) { }
+        rmq_succinct_rec_new() : m_sparse_table(nullptr), m_rmq_recursive(nullptr) { }
 
         /*!
          * We support several generalized cartesian tree layouts to minimize the depth of the tree.
@@ -186,21 +189,21 @@ class rmq_succinct_rec_new
         template<class t_rac>
         void build_sparse_table(const t_rac* v) {
             size_type n = v->size();
-            size_type block_size = 4*t_super_block_size;
+            size_type block_size = t_st_block_size;
             size_type sample_size = n/block_size + ((n % block_size) != 0);
-            m_sample_idx = new int_vector<>(sample_size);
-            m_sample_val = new int_vector<>(sample_size);
+            m_sample_idx = int_vector<>(sample_size);
+            m_sample_val = int_vector<>(sample_size);
             for(size_type i = 0; i < sample_size; ++i) {
                 size_type min_idx = i * block_size;
                 for(size_type j = i*block_size; j < std::min((i+1)*block_size,n); ++j) {
                     if((*v)[j] < (*v)[min_idx]) min_idx = j;
                 }
-                (*m_sample_val)[i] = (*v)[min_idx];
-                (*m_sample_idx)[i] = min_idx - i * block_size;
+                m_sample_val[i] = (*v)[min_idx];
+                m_sample_idx[i] = min_idx - i * block_size;
             }
-            util::bit_compress(*m_sample_idx);
-            util::bit_compress(*m_sample_val);
-            m_sparse_table = new sparse_table(m_sample_val);
+            util::bit_compress(m_sample_idx);
+            util::bit_compress(m_sample_val);
+            m_sparse_table = new sparse_table(&m_sample_val);
         }
 
         //! Determine rightmost minimum of three excess values
@@ -328,7 +331,7 @@ class rmq_succinct_rec_new
          *  \param  v     Pointer to container object.
          */
         template<class t_rac>
-        rmq_succinct_rec_new(const t_rac* v=nullptr) : m_rmq_recursive(nullptr) {
+        rmq_succinct_rec_new(const t_rac* v=nullptr) : m_sparse_table(nullptr), m_rmq_recursive(nullptr) {
             if (v != nullptr) {
                 size_type bp_size = 2*v->size()+2;
                 m_gct_bp = bit_vector(bp_size,0);
@@ -343,7 +346,7 @@ class rmq_succinct_rec_new
                     }
                     m_rank_select = rank_select_support_bp<>(&m_gct_bp);
                     build_rmq_recursive();
-                    build_sparse_table(v);
+                    if(t_st_block_size) build_sparse_table(v);
                 }
                 else {
                     //In case of building the Sparse-RMQ, we need to store the input array
@@ -383,10 +386,13 @@ class rmq_succinct_rec_new
                     m_rank_select.set_vector(&m_gct_bp);
                     m_min_excess = rm.m_min_excess;
                     m_min_excess_idx = rm.min_excess_idx;
-                    m_sample_idx = rm.m_sample_idx;
-                    m_sample_val = rm.m_sample_val;
-                    m_sparse_table = rm.m_sparse_table;
-                    m_sparse_table->set_vector(m_sample_val);
+                    m_sparse_table = nullptr;
+                    if(t_st_block_size) {
+                        m_sample_idx = rm.m_sample_idx;
+                        m_sample_val = rm.m_sample_val;
+                        m_sparse_table = rm.m_sparse_table;
+                        m_sparse_table->set_vector(&m_sample_val);
+                    }
                     m_rmq_recursive = rm.m_rmq_recursive;
                     m_max_excess_v = rm.m_max_excess_v;
                     m_max_excess_reverse_v = rm.m_max_excess_reverse_v;
@@ -408,10 +414,13 @@ class rmq_succinct_rec_new
                     m_rank_select.set_vector(&m_gct_bp);
                     m_min_excess = std::move(rm.m_min_excess);
                     m_min_excess_idx = std::move(rm.m_min_excess_idx);
-                    m_sample_idx = std::move(rm.m_sample_idx);
-                    m_sample_val = std::move(rm.m_sample_val);
-                    m_sparse_table = std::move(rm.m_sparse_table);
-                    m_sparse_table->set_vector(m_sample_val);
+                    m_sparse_table = nullptr;
+                    if(t_st_block_size) {
+                        m_sample_idx = std::move(rm.m_sample_idx);
+                        m_sample_val = std::move(rm.m_sample_val);
+                        m_sparse_table = std::move(rm.m_sparse_table);
+                        m_sparse_table->set_vector(&m_sample_val);
+                    }
                     m_rmq_recursive = std::move(rm.m_rmq_recursive);
                     m_max_excess_v = rm.m_max_excess_v;
                     m_max_excess_reverse_v = rm.m_max_excess_reverse_v;
@@ -432,10 +441,13 @@ class rmq_succinct_rec_new
                                 &m_gct_bp, &(rm.m_gct_bp));
                 m_min_excess.swap(rm.m_min_excess);
                 m_min_excess_idx.swap(rm.m_min_excess_idx);
-                m_sample_idx->swap(*(rm.m_sample_idx));
-                m_sample_val->swap(*(rm.m_sample_val));
-                util::swap_support(*m_sparse_table, *(rm.m_sparse_table),
-                                   m_sample_val, rm.m_sample_val); 
+                m_sparse_table = nullptr;
+                if(t_st_block_size) {
+                    m_sample_idx.swap(rm.m_sample_idx);
+                    m_sample_val.swap(rm.m_sample_val);
+                    util::swap_support(*m_sparse_table, *(rm.m_sparse_table),
+                                    &m_sample_val, &rm.m_sample_val); 
+                }
                 *m_rmq_recursive.swap(*rm.m_rmq_recursive);
                 std::swap(m_max_excess_v, rm.m_max_excess_v);
                 std::swap(m_max_excess_reverse_v, rm.m_max_excess_reverse_v);
@@ -463,6 +475,13 @@ class rmq_succinct_rec_new
             if (l == r) return l;
             if(m_use_sparse_rmq) {
                  return m_sparse_rmq(l,r);
+            } else if(m_sparse_table) {
+                size_type block_size = t_st_block_size;
+                size_type i = l / block_size;
+                size_type j = r / block_size;
+                size_type min_block = (*m_sparse_table)(i,j);
+                size_type min_idx = m_sample_idx[min_block] + min_block * block_size;
+                if(l <= min_idx && min_idx <= r) return min_idx;
             }
 
             size_type tmp_l = map_index(l), tmp_r = map_index(r);
@@ -554,9 +573,11 @@ class rmq_succinct_rec_new
                 written_bytes += m_rank_select.serialize(out, child, "rank_select_bp");
                 written_bytes += m_min_excess.serialize(out, child, "min_excess");
                 written_bytes += m_min_excess_idx.serialize(out, child, "min_excess_idx");
-                written_bytes += m_sample_idx->serialize(out, child, "sample_idx");
-                written_bytes += m_sample_val->serialize(out, child, "sample_val");
-                written_bytes += m_sparse_table->serialize(out, child, "sparse_table");
+                if(t_st_block_size) {
+                    written_bytes += m_sample_idx.serialize(out, child, "sample_idx");
+                    written_bytes += m_sample_val.serialize(out, child, "sample_val");
+                    written_bytes += m_sparse_table->serialize(out, child, "sparse_table");
+                }
                 written_bytes += m_rmq_recursive->serialize(out, child, "rmq_recursive");
                 written_bytes += write_member(m_max_excess_v, out, child, "m_max_excess_v");
                 written_bytes += write_member(m_max_excess_reverse_v, out, child, "m_max_excess_v_reverse");
@@ -575,12 +596,13 @@ class rmq_succinct_rec_new
                 m_rank_select.load(in, &m_gct_bp);
                 m_min_excess.load(in);
                 m_min_excess_idx.load(in);
-                m_sample_idx = new int_vector<>();
-                m_sample_val = new int_vector<>();
-                m_sparse_table = new sparse_table();
-                m_sample_idx->load(in);
-                m_sample_val->load(in);
-                m_sparse_table->load(in, m_sample_val);
+                m_sparse_table = nullptr;
+                if(t_st_block_size) {
+                    m_sparse_table = new sparse_table();
+                    m_sample_idx.load(in);
+                    m_sample_val.load(in);
+                    m_sparse_table->load(in, &m_sample_val);
+                }
                 m_rmq_recursive = new recursive_rmq();
                 m_rmq_recursive->load(in);
                 read_member(m_max_excess_v,in);

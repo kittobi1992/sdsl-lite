@@ -26,9 +26,12 @@ typedef Types<sdsl::rmq_succinct_sct<>,
         sdsl::rmq_succinct_bp<>,
         sdsl::rmq_succinct_bp_fast<>,
         sdsl::rmq_succinct_rec<>,
-        sdsl::rmq_succinct_rec_new<4096,0>,
-        sdsl::rmq_succinct_rec_new<true,1024,128,0>,
-        sdsl::rmq_succinct_rec_new<true,512,128,64,0>,
+        sdsl::rmq_succinct_rec_new<true,0,4096,0>,
+        sdsl::rmq_succinct_rec_new<true,0,1024,128,0>,
+        sdsl::rmq_succinct_rec_new<true,0,512,128,64,0>,
+        sdsl::rmq_succinct_rec_new<true,16384,4096,0>,
+        sdsl::rmq_succinct_rec_new<true,4096,1024,128,0>,
+        sdsl::rmq_succinct_rec_new<true,2048,512,128,64,0>,
         sdsl::rmq_succinct_rec_old<1024>> Implementations;
 
 TYPED_TEST_CASE(rmq_test, Implementations);
